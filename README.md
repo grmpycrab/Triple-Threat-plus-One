@@ -1,8 +1,16 @@
 # Project-X
-Triple Threat (+1)
+## Triple Threat (+1)
 
-The Developers:
+<br/>
+  This project is called <b>Project-X<b/><br/>
+  This project is a requirement for our third-year level in <b>Information Tech.
+  <br/>
+  <br/>
+
+<br/>
+
+### The Developers:<br/>
 ivasay997@gmail.com
-keyntharly@gmail.com
-projectjk47@gmail.com
-bcyrilloyd@gmail.com
+<br/>keyntharly@gmail.com
+<br/>projectjk47@gmail.com
+<br/>bcyrilloyd@gmail.com
