@@ -13,4 +13,4 @@
 <br/>ivasay997@gmail.com
 <br/>keyntharly@gmail.com
 <br/>projectjk47@gmail.com
-<br/>bcyrilloyd@gmail.com
+<br/>bcyrillloyd@gmail.com
