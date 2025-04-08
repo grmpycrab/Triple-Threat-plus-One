@@ -1,6 +1,7 @@
 import { Picker } from '@react-native-picker/picker';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
 import { useAuth } from '../context/AuthContext';
 import { userAPI } from '../services/api';
 
@@ -23,6 +24,7 @@ const AdminScreen: React.FC = () => {
   const [role, setRole] = useState<'student' | 'instructor'>('student');
   const [userId, setUserId] = useState('');
   const { user } = useAuth();
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   
   // Load users on component mount
   useEffect(() => {
@@ -123,6 +125,19 @@ const AdminScreen: React.FC = () => {
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.message || 'Failed to save user');
     }
+  };
+  
+  const handleLogout = () => {
+    setLogoutModalVisible(true);
+  };
+  
+  const confirmLogout = async () => {
+    setLogoutModalVisible(false);
+    await logout();
+  };
+  
+  const cancelLogout = () => {
+    setLogoutModalVisible(false);
   };
   
   const renderUserItem = ({ item }: { item: User }) => (
@@ -243,9 +258,15 @@ const AdminScreen: React.FC = () => {
         </View>
       </Modal>
       
-      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
+      
+      <LogoutConfirmationModal
+        visible={logoutModalVisible}
+        onConfirm={confirmLogout}
+        onCancel={cancelLogout}
+      />
     </View>
   );
 };
