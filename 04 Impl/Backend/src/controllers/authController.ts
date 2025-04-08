@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
+import { createLoginLog, createLogoutLog } from '../services/logService';
 
 // Generate JWT token
 const generateToken = (id: string) => {
@@ -33,6 +34,9 @@ export const login = async (req: Request, res: Response) => {
       }
 
       const token = generateToken(adminUser._id);
+      
+      // Log admin login
+      await createLoginLog(adminUser._id.toString(), req);
       
       return res.status(200).json({
         _id: adminUser._id,
@@ -69,6 +73,9 @@ export const login = async (req: Request, res: Response) => {
     // Generate token
     const token = generateToken(user._id);
     
+    // Log successful login
+    await createLoginLog(user._id.toString(), req);
+    
     res.status(200).json({
       _id: user._id,
       username: user.username,
@@ -90,6 +97,22 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     res.status(200).json(user);
   } catch (error) {
     console.error('Get current user error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Logout user
+export const logout = async (req: Request, res: Response) => {
+  try {
+    console.log('Logout request received for user:', req.user._id);
+    
+    // Log the logout action
+    await createLogoutLog(req.user._id.toString(), req);
+    console.log('Logout log created successfully');
+    
+    res.status(200).json({ message: 'Logged out successfully' });
+  } catch (error) {
+    console.error('Logout error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 }; 

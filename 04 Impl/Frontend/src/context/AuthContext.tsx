@@ -14,7 +14,7 @@ interface AuthContextType {
   loading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -56,9 +56,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Logout user
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
+  const logout = async () => {
+    try {
+      // Call the backend logout endpoint
+      await authAPI.logout();
+    } catch (err) {
+      console.error('Error during logout:', err);
+    } finally {
+      // Clear local auth state regardless of backend response
+      localStorage.removeItem('token');
+      setUser(null);
+    }
   };
 
   return (
