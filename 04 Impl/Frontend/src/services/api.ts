@@ -34,6 +34,16 @@ export const authAPI = {
     const response = await api.get('/auth/me');
     return response.data;
   },
+  logout: async () => {
+    // Add the device's time to the request headers
+    const deviceTime = new Date().toISOString();
+    const response = await api.post('/auth/logout', {}, {
+      headers: {
+        'x-device-time': deviceTime
+      }
+    });
+    return response.data;
+  },
 };
 
 // User API

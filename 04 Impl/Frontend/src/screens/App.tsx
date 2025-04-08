@@ -40,7 +40,7 @@ const App: React.FC = () => {
             />
           ) : (
             <Stack.Screen 
-              name="Student" 
+              name="Student"
               component={StudentScreen} 
               options={{ title: 'Student Dashboard' }}
             />

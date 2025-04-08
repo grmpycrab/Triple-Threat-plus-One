@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import { connectDB } from './config/database';
 import authRoutes from './routes/authRoutes';
+import logRoutes from './routes/logRoutes';
 import userRoutes from './routes/userRoutes';
 
 dotenv.config();
@@ -21,6 +22,7 @@ connectDB();
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/logs', logRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
