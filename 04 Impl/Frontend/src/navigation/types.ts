@@ -4,4 +4,10 @@ export type RootStackParamList = {
   Admin: undefined;
   Instructor: undefined;
   Student: undefined;
+};
+
+export type AdminDrawerParamList = {
+  Dashboard: undefined;
+  Settings: undefined;
+  ManageUsers: undefined;
 }; 

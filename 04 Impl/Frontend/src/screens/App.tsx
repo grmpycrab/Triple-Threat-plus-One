@@ -3,8 +3,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import AdminNavigator from '../navigation/AdminNavigator';
 import { RootStackParamList } from '../navigation/types';
-import AdminScreen from './AdminScreen';
 import InstructorScreen from './InstructorScreen';
 import Login from './Login';
 import SplashScreen from './SplashScreen';
@@ -53,12 +53,7 @@ const App: React.FC = () => {
                 {user.role === 'admin' && (
                   <Stack.Screen 
                     name="Admin" 
-                    component={AdminScreen} 
-                    options={{ 
-                      headerShown: true, 
-                      title: 'Admin Dashboard',
-                      animation: 'slide_from_right'
-                    }} 
+                    component={AdminNavigator}
                   />
                 )}
                 {user.role === 'instructor' && (
