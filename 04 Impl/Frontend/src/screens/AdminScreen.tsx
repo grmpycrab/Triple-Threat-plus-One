@@ -1,9 +1,15 @@
 import { Picker } from '@react-native-picker/picker';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
+import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
+import { RootStackParamList } from '../navigation/types';
 import { userAPI } from '../services/api';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 interface User {
   _id: string;
@@ -14,6 +20,7 @@ interface User {
 }
 
 const AdminScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
   const { logout } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,6 +32,7 @@ const AdminScreen: React.FC = () => {
   const [userId, setUserId] = useState('');
   const { user } = useAuth();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   
   // Load users on component mount
   useEffect(() => {
@@ -133,7 +141,18 @@ const AdminScreen: React.FC = () => {
   
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
-    await logout();
+    setShowSuccessModal(true);
+    
+    // Wait for the success modal to show before logging out
+    setTimeout(async () => {
+      await logout();
+      setShowSuccessModal(false);
+      // Navigate immediately after logout
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    }, 1500);
   };
   
   const cancelLogout = () => {
@@ -266,6 +285,11 @@ const AdminScreen: React.FC = () => {
         visible={logoutModalVisible}
         onConfirm={confirmLogout}
         onCancel={cancelLogout}
+      />
+
+      <SuccessModal 
+        visible={showSuccessModal}
+        message="Logout Successful!"
       />
     </View>
   );

@@ -1,15 +1,65 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Alert, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useEffect, useState } from 'react';
+import { Alert, Animated, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
+import { RootStackParamList } from '../navigation/types';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const Login: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+  const iconRotation = new Animated.Value(0);
+  const [isLoginSuccess, setIsLoginSuccess] = useState(false);
+
+  // Watch for user changes and navigate accordingly
+  useEffect(() => {
+    if (user && isLoginSuccess) {
+      setShowSuccessModal(true);
+      const timer = setTimeout(() => {
+        setShowSuccessModal(false);
+        switch (user.role) {
+          case 'admin':
+            navigation.replace('Admin');
+            break;
+          case 'instructor':
+            navigation.replace('Instructor');
+            break;
+          case 'student':
+            navigation.replace('Student');
+            break;
+        }
+      }, 1500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [user, navigation, isLoginSuccess]);
+
+  // Animation effect
+  useEffect(() => {
+    const rotateAnimation = Animated.loop(
+      Animated.timing(iconRotation, {
+        toValue: 1,
+        duration: 3000,
+        useNativeDriver: true,
+      })
+    );
+    rotateAnimation.start();
+  }, []);
+
+  const spin = iconRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg']
+  });
 
   const handleLogin = async () => {
     // Validate inputs
@@ -25,6 +75,7 @@ const Login: React.FC = () => {
     setIsLoading(true);
     try {
       await login(username, password);
+      setIsLoginSuccess(true);
     } catch (err: any) {
       setShowErrorModal(true);
     } finally {
@@ -43,12 +94,18 @@ const Login: React.FC = () => {
   return (
     <View style={styles.container}>
       <View style={styles.formContainer}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Please sign in to continue</Text>
+        <View style={styles.iconContainer}>
+          <Animated.View style={[{ transform: [{ rotate: spin }] }]}>
+            <Ionicons name="calendar" size={80} color="#2eada6" />
+          </Animated.View>
+        </View>
+        <Text style={styles.title}>Welcome Back!</Text>
+        <Text style={styles.subtitle}>Login to your Account</Text>
         
         <TextInput
           style={styles.input}
           placeholder="Username"
+          placeholderTextColor="#9e9e9e"
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
@@ -59,6 +116,7 @@ const Login: React.FC = () => {
           <TextInput
             style={styles.passwordInput}
             placeholder="Password"
+            placeholderTextColor="#9e9e9e"
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
@@ -72,7 +130,7 @@ const Login: React.FC = () => {
             <Ionicons 
               name={showPassword ? "eye-off" : "eye"} 
               size={24} 
-              color="#666" 
+              color="#9e9e9e" 
             />
           </TouchableOpacity>
         </View>
@@ -111,6 +169,12 @@ const Login: React.FC = () => {
           </View>
         </View>
       </Modal>
+
+      {/* Success Modal */}
+      <SuccessModal 
+        visible={showSuccessModal}
+        message="Login Successful!"
+      />
     </View>
   );
 };
@@ -120,7 +184,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 20,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#2eada6',
   },
   formContainer: {
     backgroundColor: 'white',
@@ -131,56 +195,63 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  iconContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingTop: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
-    color: '#333',
+    color: '#2eada6',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 18,
+    color: '#555',
     marginBottom: 20,
     textAlign: 'center',
   },
   input: {
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#f0f0f0',
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 8,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#ccc',
+    color: '#424242',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 5,
-    backgroundColor: '#f9f9f9',
+    borderColor: '#ccc',
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
   },
   passwordInput: {
     flex: 1,
     padding: 15,
+    color: '#424242',
   },
   eyeIcon: {
     padding: 10,
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2eada6',
     padding: 15,
-    borderRadius: 5,
+    borderRadius: 8,
     alignItems: 'center',
     marginTop: 10,
   },
   buttonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#a0a0a0',
   },
   buttonText: {
     color: 'white',
@@ -204,24 +275,24 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 10,
-    color: '#333',
+    color: '#2eada6',
   },
   modalMessage: {
     fontSize: 16,
     marginBottom: 20,
-    color: '#666',
+    color: '#555',
     textAlign: 'center',
   },
   modalButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#2eada6',
     padding: 10,
     borderRadius: 5,
     width: '50%',

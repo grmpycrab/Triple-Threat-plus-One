@@ -1,11 +1,19 @@
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
+import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
+import { RootStackParamList } from '../navigation/types';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const InstructorScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
   const { user, logout } = useAuth();
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const handleLogout = () => {
     setLogoutModalVisible(true);
@@ -13,7 +21,18 @@ const InstructorScreen: React.FC = () => {
 
   const confirmLogout = async () => {
     setLogoutModalVisible(false);
-    await logout();
+    setShowSuccessModal(true);
+    
+    // Wait for the success modal to show before logging out
+    setTimeout(async () => {
+      await logout();
+      setShowSuccessModal(false);
+      // Navigate immediately after logout
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Login' }],
+      });
+    }, 1500);
   };
 
   const cancelLogout = () => {
@@ -34,6 +53,11 @@ const InstructorScreen: React.FC = () => {
         visible={logoutModalVisible}
         onConfirm={confirmLogout}
         onCancel={cancelLogout}
+      />
+
+      <SuccessModal 
+        visible={showSuccessModal}
+        message="Logout Successful!"
       />
     </View>
   );
