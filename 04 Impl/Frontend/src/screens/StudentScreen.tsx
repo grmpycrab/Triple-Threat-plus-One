@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
@@ -23,11 +24,9 @@ const StudentScreen: React.FC = () => {
     setLogoutModalVisible(false);
     setShowSuccessModal(true);
     
-    // Wait for the success modal to show before logging out
     setTimeout(async () => {
       await logout();
       setShowSuccessModal(false);
-      // Navigate immediately after logout
       navigation.reset({
         index: 0,
         routes: [{ name: 'Login' }],
@@ -41,13 +40,37 @@ const StudentScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Hello Student!</Text>
-      <Text style={styles.subtitle}>Welcome, {user?.username}</Text>
-      <Text style={styles.userId}>Student ID: {user?.userId}</Text>
-      
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
-      </TouchableOpacity>
+      <View style={styles.headerContainer}>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Student Dashboard</Text>
+          <TouchableOpacity
+            style={styles.logoutIconButton}
+            onPress={handleLogout}
+          >
+            <Ionicons name="log-out-outline" size={24} color="white" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.contentContainer}>
+        <View style={styles.profileCard}>
+          <View style={styles.profileIconContainer}>
+            <Ionicons name="person-circle" size={80} color="#2eada6" />
+          </View>
+          <Text style={styles.welcomeText}>Welcome back,</Text>
+          <Text style={styles.nameText}>{user?.username}</Text>
+          <View style={styles.idContainer}>
+            <Ionicons name="school-outline" size={20} color="#666" />
+            <Text style={styles.idText}>Student ID: {user?.userId}</Text>
+          </View>
+        </View>
+
+        <View style={styles.infoContainer}>
+          <Text style={styles.instructionText}>
+            Access your student resources and activities through the dashboard.
+          </Text>
+        </View>
+      </View>
 
       <LogoutConfirmationModal
         visible={logoutModalVisible}
@@ -66,35 +89,101 @@ const StudentScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center', 
-    padding: 20,
+    backgroundColor: '#2eada6',
   },
-  title: {
+  headerContainer: {
+    backgroundColor: '#2eada6',
+    padding: 20,
+    paddingTop: 60, // Increased for status bar
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: 'white',
+    flex: 1,
   },
-  subtitle: {
-    fontSize: 18,
-    marginBottom: 5,
-  },
-  userId: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
-  },
-  logoutButton: {
-    backgroundColor: '#F44336',
-    padding: 15,
-    borderRadius: 5,
-    width: '80%',
+  logoutIconButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  logoutButtonText: {
-    color: 'white',
+  contentContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+    alignItems: 'center',
+  },
+  profileCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+    marginBottom: 20,
+  },
+  profileIconContainer: {
+    marginBottom: 15,
+  },
+  welcomeText: {
+    fontSize: 18,
+    color: '#666',
+    marginBottom: 5,
+  },
+  nameText: {
+    fontSize: 24,
     fontWeight: 'bold',
+    color: '#2eada6',
+    marginBottom: 15,
+  },
+  idContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  idText: {
+    fontSize: 16,
+    color: '#666',
+    marginLeft: 8,
+  },
+  infoContainer: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  instructionText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
   },
 });
 

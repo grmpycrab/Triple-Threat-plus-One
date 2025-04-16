@@ -3,17 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import ViewLogs from '../components/ActivityLogs';
+import AttendanceTracker from '../components/AttendanceTracker';
+import ClassManager from '../components/ClassManager';
 import ConfirmationModal from '../components/ConfirmationModal';
-import ManageUser from '../components/ManageUser';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
-import AdminDashboard from '../screens/AdminScreen';
-import { AdminDrawerParamList } from './types';
+import InstructorDashboard from '../screens/InstructorScreen';
+import { InstructorDrawerParamList } from './types';
 
-const Drawer = createDrawerNavigator<AdminDrawerParamList>();
+const Drawer = createDrawerNavigator<InstructorDrawerParamList>();
 
-const PROFILE_IMAGE_KEY = '@admin_profile_image';
+const PROFILE_IMAGE_KEY = '@instructor_profile_image';
 
 const CustomDrawerContent = ({ navigation }: any) => {
   const { logout, user } = useAuth();
@@ -24,7 +24,6 @@ const CustomDrawerContent = ({ navigation }: any) => {
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
 
-  // Load saved profile image on component mount
   useEffect(() => {
     loadProfileImage();
   }, []);
@@ -65,7 +64,7 @@ const CustomDrawerContent = ({ navigation }: any) => {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      if (file.size > 5 * 1024 * 1024) {
         Alert.alert('Error', 'Image size should be less than 5MB');
         return;
       }
@@ -155,9 +154,9 @@ const CustomDrawerContent = ({ navigation }: any) => {
             )}
           </TouchableOpacity>
           <View style={styles.profileInfo}>
-            <Text style={styles.username}>{user?.username || 'Admin'}</Text>
-            <Text style={styles.role}>{user?.role?.toUpperCase() || 'ADMIN'}</Text>
-            <Text style={styles.email}>{user?.email || 'admin@example.com'}</Text>
+            <Text style={styles.username}>{user?.username || 'Instructor'}</Text>
+            <Text style={styles.role}>{user?.role?.toUpperCase() || 'INSTRUCTOR'}</Text>
+            <Text style={styles.email}>{user?.email || 'instructor@example.com'}</Text>
           </View>
           <input
             type="file"
@@ -185,20 +184,20 @@ const CustomDrawerContent = ({ navigation }: any) => {
 
       <TouchableOpacity
         style={styles.drawerItem}
-        onPress={() => navigation.navigate('ManageUsers')}
+        onPress={() => navigation.navigate('AttendanceTracker')}
       >
-        <Ionicons name="people-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Manage Users</Text>
+        <Ionicons name="calendar-outline" size={24} color="#2eada6" />
+        <Text style={styles.drawerItemText}>Attendance Tracker</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.drawerItem}
-        onPress={() => navigation.navigate('ViewLogs')}
+        onPress={() => navigation.navigate('ClassManager')}
       >
-        <Ionicons name="list-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Activity Logs</Text>
+        <Ionicons name="school-outline" size={24} color="#2eada6" />
+        <Text style={styles.drawerItemText}>Class Manager</Text>
       </TouchableOpacity>
-      
+
       <TouchableOpacity
         style={[styles.drawerItem, styles.logoutButton]}
         onPress={handleLogoutPress}
@@ -233,7 +232,7 @@ const CustomDrawerContent = ({ navigation }: any) => {
   );
 };
 
-const AdminNavigator = () => {
+const InstructorNavigator = () => {
   return (
     <Drawer.Navigator
       initialRouteName="Dashboard"
@@ -253,21 +252,21 @@ const AdminNavigator = () => {
     >
       <Drawer.Screen 
         name="Dashboard" 
-        component={AdminDashboard}
+        component={InstructorDashboard}
         options={{
           swipeEnabled: true,
         }}
       />
       <Drawer.Screen 
-        name="ManageUsers" 
-        component={ManageUser}
+        name="AttendanceTracker" 
+        component={AttendanceTracker}
         options={{
           swipeEnabled: true,
         }}
       />
       <Drawer.Screen 
-        name="ViewLogs" 
-        component={ViewLogs}
+        name="ClassManager" 
+        component={ClassManager}
         options={{
           swipeEnabled: true,
         }}
@@ -409,4 +408,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AdminNavigator; 
+export default InstructorNavigator; 

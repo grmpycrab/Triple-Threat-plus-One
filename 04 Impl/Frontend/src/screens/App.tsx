@@ -2,10 +2,11 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuth } from '../context/AuthContext';
 import AdminNavigator from '../navigation/AdminNavigator';
+import InstructorNavigator from '../navigation/InstructorNavigator';
 import { RootStackParamList } from '../navigation/types';
-import InstructorScreen from './InstructorScreen';
 import Login from './Login';
 import SplashScreen from './SplashScreen';
 import StudentScreen from './StudentScreen';
@@ -36,54 +37,46 @@ const App: React.FC = () => {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator 
-        screenOptions={{ 
-          headerShown: false,
-          animation: 'fade'
-        }}
-      >
-        {isFirstLoad ? (
-          <Stack.Screen name="Splash" component={SplashScreen} />
-        ) : (
-          <>
-            <Stack.Screen name="Login" component={Login} />
-            {user && (
-              <>
-                {user.role === 'admin' && (
-                  <Stack.Screen 
-                    name="Admin" 
-                    component={AdminNavigator}
-                  />
-                )}
-                {user.role === 'instructor' && (
-                  <Stack.Screen 
-                    name="Instructor" 
-                    component={InstructorScreen} 
-                    options={{ 
-                      headerShown: true, 
-                      title: 'Instructor Dashboard',
-                      animation: 'slide_from_right'
-                    }} 
-                  />
-                )}
-                {user.role === 'student' && (
-                  <Stack.Screen 
-                    name="Student" 
-                    component={StudentScreen} 
-                    options={{ 
-                      headerShown: true, 
-                      title: 'Student Dashboard',
-                      animation: 'slide_from_right'
-                    }} 
-                  />
-                )}
-              </>
-            )}
-          </>
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer>
+        <Stack.Navigator 
+          screenOptions={{ 
+            headerShown: false,
+            animation: 'fade'
+          }}
+        >
+          {isFirstLoad ? (
+            <Stack.Screen name="Splash" component={SplashScreen} />
+          ) : (
+            <>
+              <Stack.Screen name="Login" component={Login} />
+              {user && (
+                <>
+                  {user.role === 'admin' && (
+                    <Stack.Screen 
+                      name="Admin" 
+                      component={AdminNavigator}
+                    />
+                  )}
+                  {user.role === 'instructor' && (
+                    <Stack.Screen 
+                      name="Instructor" 
+                      component={InstructorNavigator}
+                    />
+                  )}
+                  {user.role === 'student' && (
+                    <Stack.Screen 
+                      name="Student" 
+                      component={StudentScreen}
+                    />
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 };
 

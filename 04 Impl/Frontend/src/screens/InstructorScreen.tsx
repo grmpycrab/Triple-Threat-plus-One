@@ -1,64 +1,51 @@
+import { Ionicons } from '@expo/vector-icons';
+import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
-import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
-import { RootStackParamList } from '../navigation/types';
+import { InstructorDrawerParamList } from '../navigation/types';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type NavigationProp = DrawerNavigationProp<InstructorDrawerParamList>;
 
 const InstructorScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { user, logout } = useAuth();
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  const handleLogout = () => {
-    setLogoutModalVisible(true);
-  };
-
-  const confirmLogout = async () => {
-    setLogoutModalVisible(false);
-    setShowSuccessModal(true);
-    
-    // Wait for the success modal to show before logging out
-    setTimeout(async () => {
-      await logout();
-      setShowSuccessModal(false);
-      // Navigate immediately after logout
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Login' }],
-      });
-    }, 1500);
-  };
-
-  const cancelLogout = () => {
-    setLogoutModalVisible(false);
-  };
+  const { user } = useAuth();
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Hello Instructor!</Text>
-      <Text style={styles.subtitle}>Welcome, {user?.username}</Text>
-      <Text style={styles.userId}>Instructor ID: {user?.userId}</Text>
-      
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
-      </TouchableOpacity>
+      <View style={styles.headerContainer}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => navigation.toggleDrawer()}
+          >
+            <Ionicons name="menu" size={28} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Instructor Dashboard</Text>
+          <View style={styles.menuButton} />
+        </View>
+      </View>
 
-      <LogoutConfirmationModal
-        visible={logoutModalVisible}
-        onConfirm={confirmLogout}
-        onCancel={cancelLogout}
-      />
+      <View style={styles.contentContainer}>
+        <View style={styles.profileCard}>
+          <View style={styles.profileIconContainer}>
+            <Ionicons name="person-circle" size={80} color="#2eada6" />
+          </View>
+          <Text style={styles.welcomeText}>Welcome back,</Text>
+          <Text style={styles.nameText}>{user?.username}</Text>
+          <View style={styles.idContainer}>
+            <Ionicons name="school-outline" size={20} color="#666" />
+            <Text style={styles.idText}>Instructor ID: {user?.userId}</Text>
+          </View>
+        </View>
 
-      <SuccessModal 
-        visible={showSuccessModal}
-        message="Logout Successful!"
-      />
+        <View style={styles.infoContainer}>
+          <Text style={styles.instructionText}>
+            Manage your classes and student activities through the dashboard.
+          </Text>
+        </View>
+      </View>
     </View>
   );
 };
@@ -66,35 +53,102 @@ const InstructorScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#2eada6',
+  },
+  headerContainer: {
+    backgroundColor: '#2eada6',
     padding: 20,
+    paddingTop: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
   },
-  title: {
-    fontSize: 24,
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 10,
+    color: 'white',
+    textAlign: 'right',
+    flex: 1,
   },
-  subtitle: {
+  contentContainer: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 20,
+    alignItems: 'center',
+  },
+  profileCard: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+    marginBottom: 20,
+  },
+  profileIconContainer: {
+    marginBottom: 15,
+  },
+  welcomeText: {
     fontSize: 18,
+    color: '#666',
     marginBottom: 5,
   },
-  userId: {
+  nameText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2eada6',
+    marginBottom: 15,
+  },
+  idContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  idText: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 30,
+    marginLeft: 8,
   },
-  logoutButton: {
-    backgroundColor: '#F44336',
-    padding: 15,
-    borderRadius: 5,
-    width: '80%',
+  infoContainer: {
+    backgroundColor: 'white',
+    borderRadius: 15,
+    padding: 20,
+    width: '100%',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  logoutButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
+  instructionText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
   },
 });
 
