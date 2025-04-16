@@ -60,12 +60,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       // Call the backend logout endpoint
       await authAPI.logout();
-    } catch (err) {
-      console.error('Error during logout:', err);
-    } finally {
-      // Clear local auth state regardless of backend response
+      // Clear local auth state only after successful logout
       localStorage.removeItem('token');
       setUser(null);
+    } catch (err: any) {
+      console.error('Error during logout:', err);
+      // If it's a network error or the server is down, still clear local state
+      if (!err.response || err.response.status >= 500) {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+      throw err; // Propagate the error to the component
     }
   };
 

@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { Alert, Animated, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import DevLoginTool from '../components/DevLoginTool';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
@@ -146,9 +146,17 @@ const Login: React.FC = () => {
           onPress={handleLogin}
           disabled={isLoading}
         >
-          <Text style={styles.buttonText}>
-            {isLoading ? 'Signing in...' : 'Sign In'}
-          </Text>
+          <View style={styles.buttonContent}>
+            <Text style={styles.buttonText}>
+              {isLoading ? 'Signing in' : 'Sign In'}
+            </Text>
+            {isLoading && (
+              <View style={styles.loadingContainer}>
+                <Text style={styles.loadingDots}>...</Text>
+                <ActivityIndicator size="small" color="white" style={styles.loadingIcon} />
+              </View>
+            )}
+          </View>
         </TouchableOpacity>
       </View>
 
@@ -256,10 +264,29 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     backgroundColor: '#a0a0a0',
   },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   buttonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 4,
+  },
+  loadingDots: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginRight: 4,
+  },
+  loadingIcon: {
+    marginLeft: 4,
   },
   modalOverlay: {
     flex: 1,

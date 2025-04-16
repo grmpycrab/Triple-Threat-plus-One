@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
-import { createLoginLog, createLogoutLog } from '../services/logService';
+import { cleanupStaleSessions, createLoginLog, createLogoutLog } from '../services/logService';
 
 // Generate JWT token
 const generateToken = (id: string) => {
@@ -14,7 +14,7 @@ const generateToken = (id: string) => {
 export const login = async (req: Request, res: Response) => {
   try {
     const { username, password } = req.body;
-    console.log('Login attempt:', { username, password });
+    console.log('Login attempt:', { username });
 
     // Check for admin credentials
     if (username === 'admin' && password === '12345') {
@@ -84,7 +84,7 @@ export const login = async (req: Request, res: Response) => {
       userId: user.userId,
       token
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -93,9 +93,14 @@ export const login = async (req: Request, res: Response) => {
 // Get current user
 export const getCurrentUser = async (req: Request, res: Response) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user?._id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
     res.status(200).json(user);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Get current user error:', error);
     res.status(500).json({ message: 'Server error' });
   }
@@ -104,15 +109,55 @@ export const getCurrentUser = async (req: Request, res: Response) => {
 // Logout user
 export const logout = async (req: Request, res: Response) => {
   try {
-    console.log('Logout request received for user:', req.user._id);
+    const userId = req.user?._id;
     
-    // Log the logout action
-    await createLogoutLog(req.user._id.toString(), req);
-    console.log('Logout log created successfully');
+    if (!userId) {
+      console.error('No user ID found in request');
+      return res.status(401).json({ message: 'Not authorized' });
+    }
+
+    console.log('Processing logout for user:', userId);
+
+    try {
+      // Log the logout action
+      const logoutResult = await createLogoutLog(userId.toString(), req);
+      
+      if (!logoutResult) {
+        console.warn('No logout log created, but proceeding with logout');
+      } else {
+        console.log('Logout log created successfully:', logoutResult._id);
+      }
+      
+      res.status(200).json({ message: 'Logged out successfully' });
+    } catch (logError: any) {
+      console.error('Error during logout process:', {
+        error: logError,
+        userId,
+        message: logError.message,
+        stack: logError.stack
+      });
+      
+      // If it's a user not found error, return 401
+      if (logError.message === 'User not found') {
+        return res.status(401).json({ message: 'User not found' });
+      }
+      
+      throw logError; // Re-throw for the outer catch block
+    }
+  } catch (error: any) {
+    console.error('Unhandled error during logout:', {
+      error,
+      userId: req.user?._id,
+      message: error.message,
+      stack: error.stack
+    });
     
-    res.status(200).json({ message: 'Logged out successfully' });
-  } catch (error) {
-    console.error('Logout error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ 
+      message: 'Server error during logout',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
-}; 
+};
+
+// Run cleanup of stale sessions periodically
+setInterval(cleanupStaleSessions, 60 * 60 * 1000); // Run every hour 

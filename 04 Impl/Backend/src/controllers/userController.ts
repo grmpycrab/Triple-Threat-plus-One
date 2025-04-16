@@ -43,23 +43,31 @@ export const createUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid instructor ID format. Use format: T-YYYY' });
     }
     
-    // Check if user already exists - trim username to handle spaces
-    const userExists = await User.findOne({ 
-      $or: [
-        { email: email.trim().toLowerCase() }, 
-        { username: username.trim() }, 
-        { userId: userId.trim() }
-      ] 
-    });
+    if (role === 'admin' && !/^ADMIN-\d{3}$/.test(userId)) {
+      return res.status(400).json({ message: 'Invalid admin ID format. Use format: ADMIN-XXX' });
+    }
     
-    if (userExists) {
-      console.log('User already exists:', userExists);
-      return res.status(400).json({ message: 'User already exists' });
+    // Check for duplicates individually
+    const duplicateChecks = await Promise.all([
+      User.findOne({ email: email.trim().toLowerCase() }),
+      User.findOne({ username: username.trim() }),
+      User.findOne({ userId: userId.trim() })
+    ]);
+
+    const duplicateFields = [];
+    if (duplicateChecks[0]) duplicateFields.push('email');
+    if (duplicateChecks[1]) duplicateFields.push('username');
+    if (duplicateChecks[2]) duplicateFields.push('user ID');
+
+    if (duplicateFields.length > 0) {
+      return res.status(400).json({
+        message: `The following fields are already in use: ${duplicateFields.join(', ')}`,
+        duplicates: duplicateFields
+      });
     }
     
     // Use userId as password - do not hash it here, the pre-save hook will handle it
     const password = userId;
-    console.log('Setting password to userId:', password);
     
     // Create user - password will be hashed by the pre-save hook
     const user = await User.create({
@@ -112,16 +120,36 @@ export const updateUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Invalid instructor ID format. Use format: T-YYYY' });
     }
     
-    // Check if another user with the same username, email, or userId exists
-    const userExists = await User.findOne({
-      $and: [
-        { _id: { $ne: req.params.id } },
-        { $or: [{ email }, { username }, { userId }] }
-      ]
-    });
+    if (role === 'admin' && !/^ADMIN-\d{3}$/.test(userId)) {
+      return res.status(400).json({ message: 'Invalid admin ID format. Use format: ADMIN-XXX' });
+    }
     
-    if (userExists) {
-      return res.status(400).json({ message: 'Another user with the same username, email, or ID already exists' });
+    // Check for duplicates individually, excluding the current user
+    const duplicateChecks = await Promise.all([
+      User.findOne({ 
+        _id: { $ne: req.params.id },
+        email: email.trim().toLowerCase()
+      }),
+      User.findOne({ 
+        _id: { $ne: req.params.id },
+        username: username.trim()
+      }),
+      User.findOne({ 
+        _id: { $ne: req.params.id },
+        userId: userId.trim()
+      })
+    ]);
+
+    const duplicateFields = [];
+    if (duplicateChecks[0]) duplicateFields.push('email');
+    if (duplicateChecks[1]) duplicateFields.push('username');
+    if (duplicateChecks[2]) duplicateFields.push('user ID');
+
+    if (duplicateFields.length > 0) {
+      return res.status(400).json({
+        message: `The following fields are already in use: ${duplicateFields.join(', ')}`,
+        duplicates: duplicateFields
+      });
     }
     
     // Update user
@@ -159,9 +187,26 @@ export const deleteUser = async (req: Request, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
-    // Prevent deleting admin user
-    if (user.role === 'admin') {
-      return res.status(400).json({ message: 'Cannot delete admin user' });
+    // Get the requesting user's ID from the request body
+    const requestingUserId = req.body.requestingUserId;
+    if (!requestingUserId) {
+      return res.status(400).json({ message: 'Requesting user ID is required' });
+    }
+
+    // Find the requesting user
+    const requestingUser = await User.findById(requestingUserId);
+    if (!requestingUser) {
+      return res.status(404).json({ message: 'Requesting user not found' });
+    }
+
+    // Prevent users from deleting themselves
+    if (req.params.id === requestingUserId) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+
+    // Protect ADMIN-001 from deletion
+    if (user.userId === 'ADMIN-001') {
+      return res.status(400).json({ message: 'Cannot delete the root admin account (ADMIN-001)' });
     }
     
     // Use deleteOne instead of remove

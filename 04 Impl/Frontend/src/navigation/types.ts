@@ -6,8 +6,10 @@ export type RootStackParamList = {
   Student: undefined;
 };
 
+export type UserRole = 'student' | 'instructor' | 'admin';
+
 export type AdminDrawerParamList = {
   Dashboard: undefined;
-  Settings: undefined;
   ManageUsers: undefined;
+  ViewLogs: undefined;
 }; 
