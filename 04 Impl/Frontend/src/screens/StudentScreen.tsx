@@ -1,54 +1,28 @@
 import { Ionicons } from '@expo/vector-icons';
+import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import LogoutConfirmationModal from '../components/LogoutConfirmationModal';
-import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
-import { RootStackParamList } from '../navigation/types';
+import { StudentDrawerParamList } from '../navigation/types';
 
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type NavigationProp = DrawerNavigationProp<StudentDrawerParamList>;
 
 const StudentScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { user, logout } = useAuth();
-  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  const handleLogout = () => {
-    setLogoutModalVisible(true);
-  };
-
-  const confirmLogout = async () => {
-    setLogoutModalVisible(false);
-    setShowSuccessModal(true);
-    
-    setTimeout(async () => {
-      await logout();
-      setShowSuccessModal(false);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Login' }],
-      });
-    }, 1500);
-  };
-
-  const cancelLogout = () => {
-    setLogoutModalVisible(false);
-  };
+  const { user } = useAuth();
 
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         <View style={styles.headerContent}>
-          <Text style={styles.headerTitle}>Student Dashboard</Text>
           <TouchableOpacity
-            style={styles.logoutIconButton}
-            onPress={handleLogout}
+            style={styles.menuButton}
+            onPress={() => navigation.toggleDrawer()}
           >
-            <Ionicons name="log-out-outline" size={24} color="white" />
+            <Ionicons name="menu" size={28} color="white" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Student Dashboard</Text>
         </View>
       </View>
 
@@ -71,17 +45,6 @@ const StudentScreen: React.FC = () => {
           </Text>
         </View>
       </View>
-
-      <LogoutConfirmationModal
-        visible={logoutModalVisible}
-        onConfirm={confirmLogout}
-        onCancel={cancelLogout}
-      />
-
-      <SuccessModal 
-        visible={showSuccessModal}
-        message="Logout Successful!"
-      />
     </View>
   );
 };
@@ -94,7 +57,7 @@ const styles = StyleSheet.create({
   headerContainer: {
     backgroundColor: '#2eada6',
     padding: 20,
-    paddingTop: 60, // Increased for status bar
+    paddingTop: 20,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255, 255, 255, 0.2)',
   },
@@ -102,18 +65,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    width: '100%',
+  },
+  menuButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 0,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
-    flex: 1,
-  },
-  logoutIconButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+    textAlign: 'right',
   },
   contentContainer: {
     flex: 1,

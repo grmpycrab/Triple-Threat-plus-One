@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { UserRole } from '../navigation/types';
 
@@ -12,18 +13,13 @@ const api = axios.create({
 });
 
 // Add token to requests if it exists
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+});
 
 // Auth API
 export const authAPI = {
@@ -132,6 +128,29 @@ export const logAPI = {
     console.log('Clear logs response:', response.data);
     return response.data;
   }
+};
+
+// Class API
+export const classAPI = {
+  getClasses: async () => {
+    const response = await api.get('/classes');
+    return response.data;
+  },
+
+  createClass: async (classData: any) => {
+    const response = await api.post('/classes', classData);
+    return response.data;
+  },
+
+  updateClass: async (id: string, classData: any) => {
+    const response = await api.put(`/classes/${id}`, classData);
+    return response.data;
+  },
+
+  deleteClass: async (id: string) => {
+    const response = await api.delete(`/classes/${id}`);
+    return response.data;
+  },
 };
 
 export default api; 

@@ -6,10 +6,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useAuth } from '../context/AuthContext';
 import AdminNavigator from '../navigation/AdminNavigator';
 import InstructorNavigator from '../navigation/InstructorNavigator';
+import StudentNavigator from '../navigation/StudentNavigator';
 import { RootStackParamList } from '../navigation/types';
 import Login from './Login';
 import SplashScreen from './SplashScreen';
-import StudentScreen from './StudentScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -67,7 +67,7 @@ const App: React.FC = () => {
                   {user.role === 'student' && (
                     <Stack.Screen 
                       name="Student" 
-                      component={StudentScreen}
+                      component={StudentNavigator}
                     />
                   )}
                 </>

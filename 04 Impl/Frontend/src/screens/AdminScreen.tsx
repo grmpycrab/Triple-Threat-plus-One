@@ -21,7 +21,6 @@ const AdminScreen: React.FC = () => {
             <Ionicons name="menu" size={28} color="white" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Admin Dashboard</Text>
-          <View style={styles.menuButton} />
         </View>
       </View>
       <View style={styles.contentContainer}>
@@ -48,19 +47,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    width: '100%',
   },
   menuButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    paddingLeft: 0,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: 'white',
     textAlign: 'right',
-    flex: 1,
   },
   contentContainer: {
     flex: 1,

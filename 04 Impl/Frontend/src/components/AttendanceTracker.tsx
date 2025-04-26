@@ -1,160 +1,78 @@
 import { Ionicons } from '@expo/vector-icons';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { DrawerNavigationProp } from '@react-navigation/drawer';
-import { useNavigation } from '@react-navigation/native';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AttendanceNavigationParamList, InstructorDrawerParamList } from '../navigation/types';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import AttendanceHome from './attendance/AttendanceHome';
 import ManualAttendance from './attendance/ManualAttendance';
 import QRScanner from './attendance/QRScanner';
 
-type NavigationProp = DrawerNavigationProp<InstructorDrawerParamList>;
-const Tab = createBottomTabNavigator<AttendanceNavigationParamList>();
-
-const { width } = Dimensions.get('window');
-const TAB_WIDTH = width / 3;
-const INDICATOR_WIDTH = 24;
-const INDICATOR_OFFSET = (TAB_WIDTH - INDICATOR_WIDTH) / 2;
-
-interface TabIconProps {
-  name: keyof typeof Ionicons.glyphMap;
-  focused: boolean;
-  size?: number;
-}
-
-const TabIcon = ({ name, focused, size = 24 }: TabIconProps) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: focused ? 1.2 : 1,
-      useNativeDriver: true,
-      friction: 10,
-    }).start();
-  }, [focused]);
-
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        <Ionicons
-          name={focused ? name : `${name}-outline` as keyof typeof Ionicons.glyphMap}
-          size={size}
-          color={focused ? 'white' : 'rgba(255, 255, 255, 0.6)'}
-        />
-      </Animated.View>
-    </View>
-  );
-};
+type ComponentType = 'home' | 'qr' | 'manual';
 
 const AttendanceTracker: React.FC = () => {
-  const navigation = useNavigation<NavigationProp>();
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const [activeComponent, setActiveComponent] = useState<ComponentType>('home');
 
-  const handleTabPress = (index: number) => {
-    Animated.spring(slideAnim, {
-      toValue: (index * TAB_WIDTH) + INDICATOR_OFFSET,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 50,
-    }).start();
+  const renderComponent = () => {
+    switch (activeComponent) {
+      case 'qr':
+        return <QRScanner />;
+      case 'manual':
+        return <ManualAttendance />;
+      default:
+        return <AttendanceHome />;
+    }
   };
 
-  useEffect(() => {
-    // Initialize line position to first tab
-    slideAnim.setValue(INDICATOR_OFFSET);
-  }, []);
-
-  const Header = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.headerContent}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.navigate('Dashboard')}
-        >
-          <Ionicons name="arrow-back" size={24} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Attendance Tracker</Text>
+  const GridItem = ({ 
+    icon, 
+    label, 
+    value, 
+    isActive 
+  }: { 
+    icon: keyof typeof Ionicons.glyphMap;
+    label: string;
+    value: ComponentType;
+    isActive: boolean;
+  }) => (
+    <TouchableOpacity 
+      style={[styles.gridItem, isActive && styles.activeGridItem]}
+      onPress={() => setActiveComponent(value)}
+    >
+      <View style={[styles.iconContainer, isActive && styles.activeIconContainer]}>
+        <Ionicons 
+          name={icon} 
+          size={32} 
+          color={isActive ? '#2eada6' : '#666'} 
+        />
       </View>
-    </View>
+      <Text style={[styles.label, isActive && styles.activeLabel]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 
   return (
     <View style={styles.container}>
-      <Header />
-      <View style={{ flex: 1 }}>
-        <Tab.Navigator
-          screenOptions={{
-            headerShown: false,
-            tabBarStyle: {
-              backgroundColor: '#2eada6',
-              borderTopWidth: 1,
-              borderTopColor: 'rgba(255, 255, 255, 0.2)',
-              height: 70,
-              paddingTop: 8,
-              paddingBottom: 12,
-            },
-            tabBarShowLabel: false,
-            tabBarItemStyle: {
-              paddingBottom: 4,
-            },
-          }}
-          screenListeners={({ navigation }) => ({
-            tabPress: (e) => {
-              const index = navigation.getState().index;
-              handleTabPress(index);
-            },
-          })}
-        >
-          <Tab.Screen 
-            name="Home" 
-            component={AttendanceHome}
-            options={{
-              tabBarIcon: ({ focused }) => (
-                <TabIcon name="home" focused={focused} />
-              ),
-            }}
-            listeners={{
-              tabPress: () => handleTabPress(0),
-            }}
-          />
-          <Tab.Screen 
-            name="QRCode" 
-            component={QRScanner}
-            options={{
-              tabBarIcon: ({ focused }) => (
-                <TabIcon name="qr-code" focused={focused} />
-              ),
-            }}
-            listeners={{
-              tabPress: () => handleTabPress(1),
-            }}
-          />
-          <Tab.Screen 
-            name="Manual" 
-            component={ManualAttendance}
-            options={{
-              tabBarIcon: ({ focused }) => (
-                <TabIcon name="list" focused={focused} />
-              ),
-            }}
-            listeners={{
-              tabPress: () => handleTabPress(2),
-            }}
-          />
-        </Tab.Navigator>
-        <Animated.View
-          style={{
-            position: 'absolute',
-            bottom: 16,
-            left: 0,
-            width: INDICATOR_WIDTH,
-            height: 3,
-            backgroundColor: 'white',
-            borderRadius: 1.5,
-            transform: [{ translateX: slideAnim }],
-          }}
+      <View style={styles.gridContainer}>
+        <GridItem
+          icon="stats-chart"
+          label="Overview"
+          value="home"
+          isActive={activeComponent === 'home'}
         />
+        <GridItem
+          icon="qr-code"
+          label="QR Scanner"
+          value="qr"
+          isActive={activeComponent === 'qr'}
+        />
+        <GridItem
+          icon="create"
+          label="Manual Entry"
+          value="manual"
+          isActive={activeComponent === 'manual'}
+        />
+      </View>
+      <View style={styles.componentContainer}>
+        {renderComponent()}
       </View>
     </View>
   );
@@ -163,32 +81,58 @@ const AttendanceTracker: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2eada6',
+    backgroundColor: '#f5f5f5',
   },
-  headerContainer: {
-    backgroundColor: '#2eada6',
-    padding: 20,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  headerContent: {
+  gridContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
+    padding: 16,
+    backgroundColor: 'white',
+    margin: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  backButton: {
-    width: 40,
-    height: 40,
+  gridItem: {
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 100,
+  },
+  activeGridItem: {
+    backgroundColor: 'rgba(46, 173, 166, 0.1)',
+  },
+  iconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f5f5f5',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 8,
   },
-  headerTitle: {
-    fontSize: 20,
+  activeIconContainer: {
+    backgroundColor: 'rgba(46, 173, 166, 0.2)',
+  },
+  label: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  activeLabel: {
+    color: '#2eada6',
     fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'right',
+  },
+  componentContainer: {
     flex: 1,
+    backgroundColor: '#f5f5f5',
   },
 });
 

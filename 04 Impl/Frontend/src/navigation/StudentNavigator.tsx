@@ -6,12 +6,12 @@ import { Alert, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from '
 import ConfirmationModal from '../components/ConfirmationModal';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
-import InstructorDashboard from '../screens/InstructorScreen';
-import { InstructorDrawerParamList } from './types';
+import StudentDashboard from '../screens/StudentScreen';
+import { StudentDrawerParamList } from './types';
 
-const Drawer = createDrawerNavigator<InstructorDrawerParamList>();
+const Drawer = createDrawerNavigator<StudentDrawerParamList>();
 
-const PROFILE_IMAGE_KEY = '@instructor_profile_image';
+const PROFILE_IMAGE_KEY = '@student_profile_image';
 
 const CustomDrawerContent = ({ navigation }: any) => {
   const { logout, user } = useAuth();
@@ -123,13 +123,9 @@ const CustomDrawerContent = ({ navigation }: any) => {
       setShowConfirmModal(false);
       setShowSuccessModal(true);
       
-      // First wait for a short delay to show the modal
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Then perform logout
       await logout();
 
-      // Wait for the success modal to be visible
       setTimeout(() => {
         setShowSuccessModal(false);
         navigation.reset({
@@ -173,9 +169,9 @@ const CustomDrawerContent = ({ navigation }: any) => {
             )}
           </TouchableOpacity>
           <View style={styles.profileInfo}>
-            <Text style={styles.username}>{user?.username || 'Instructor'}</Text>
-            <Text style={styles.role}>{user?.role?.toUpperCase() || 'INSTRUCTOR'}</Text>
-            <Text style={styles.email}>{user?.email || 'instructor@example.com'}</Text>
+            <Text style={styles.username}>{user?.username || 'Student'}</Text>
+            <Text style={styles.role}>{user?.role?.toUpperCase() || 'STUDENT'}</Text>
+            <Text style={styles.email}>{user?.email || 'student@example.com'}</Text>
           </View>
           <input
             type="file"
@@ -262,10 +258,10 @@ const CustomDrawerContent = ({ navigation }: any) => {
   );
 };
 
-const InstructorNavigator = () => {
+const StudentNavigator = () => {
   return (
     <Drawer.Navigator
-      initialRouteName="Notifications"
+      initialRouteName="Dashboard"
       screenOptions={{
         headerShown: false,
         drawerStyle: {
@@ -281,22 +277,22 @@ const InstructorNavigator = () => {
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
       <Drawer.Screen 
-        name="Notifications" 
-        component={InstructorDashboard}
+        name="Dashboard" 
+        component={StudentDashboard}
         options={{
           swipeEnabled: true,
         }}
       />
       <Drawer.Screen 
         name="AboutApp" 
-        component={InstructorDashboard}
+        component={StudentDashboard}
         options={{
           swipeEnabled: true,
         }}
       />
       <Drawer.Screen 
         name="HelpSupport" 
-        component={InstructorDashboard}
+        component={StudentDashboard}
         options={{
           swipeEnabled: true,
         }}
@@ -451,4 +447,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default InstructorNavigator; 
+export default StudentNavigator; 
