@@ -25,8 +25,11 @@ export type InstructorDrawerParamList = {
 
 export type StudentDrawerParamList = {
   Dashboard: undefined;
-  AboutApp: undefined;
+  EditProfile: undefined;
+  AttendanceSettings: undefined;
+  PrivacySecurity: undefined;
   HelpSupport: undefined;
+  AboutApp: undefined;
 };
 
 export type AttendanceNavigationParamList = {
