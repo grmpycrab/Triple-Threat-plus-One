@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import ClassManager from '../components/attendance/AttendanceManager';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
@@ -175,7 +176,7 @@ const CustomDrawerContent = ({ navigation }: any) => {
           <View style={styles.profileInfo}>
             <Text style={styles.username}>{user?.username || 'Instructor'}</Text>
             <Text style={styles.role}>{user?.role?.toUpperCase() || 'INSTRUCTOR'}</Text>
-            <Text style={styles.email}>{user?.email || 'instructor@example.com'}</Text>
+            <Text style={styles.instructorId}>ID: {user?.userId || 'T-0000'}</Text>
           </View>
           <input
             type="file"
@@ -265,7 +266,7 @@ const CustomDrawerContent = ({ navigation }: any) => {
 const InstructorNavigator = () => {
   return (
     <Drawer.Navigator
-      initialRouteName="Notifications"
+      initialRouteName="Dashboard"
       screenOptions={{
         headerShown: false,
         drawerStyle: {
@@ -281,10 +282,19 @@ const InstructorNavigator = () => {
       drawerContent={(props) => <CustomDrawerContent {...props} />}
     >
       <Drawer.Screen 
-        name="Notifications" 
+        name="Dashboard" 
         component={InstructorDashboard}
         options={{
           swipeEnabled: true,
+        }}
+      />
+      <Drawer.Screen 
+        name="AttendanceManager" 
+        component={ClassManager}
+        options={{
+          drawerIcon: ({ color }) => (
+            <Ionicons name="school" size={24} color={color} />
+          ),
         }}
       />
       <Drawer.Screen 
@@ -376,10 +386,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     textAlign: 'center',
   },
-  email: {
+  instructorId: {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 14,
     textAlign: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 15,
+    marginTop: 4,
   },
   closeButton: {
     position: 'absolute',

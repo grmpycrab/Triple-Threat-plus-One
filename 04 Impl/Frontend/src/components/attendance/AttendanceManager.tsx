@@ -1,9 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
+import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { BlurView } from 'expo-blur';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { classAPI } from '../services/api';
+import { RootStackParamList } from '../../navigation/types';
+import { classAPI } from '../../services/api';
 
 interface TimeSlot {
   days: string[];
@@ -22,7 +25,7 @@ interface DaySelection {
   S: boolean;
 }
 
-interface Class {
+export interface Class {
   _id: string;
   className: string;
   subjectCode: string;
@@ -32,7 +35,7 @@ interface Class {
   yearSection: string;
 }
 
-const ClassManager: React.FC = () => {
+const AttendanceManager: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [className, setClassName] = useState('');
   const [subjectCode, setSubjectCode] = useState('');
@@ -65,6 +68,7 @@ const ClassManager: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isAllSelected, setIsAllSelected] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState<string | null>(null);
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
 
   useEffect(() => {
     fetchClasses();
@@ -90,7 +94,7 @@ const ClassManager: React.FC = () => {
     }
   };
 
-  const toggleCard = (classId: string) => {
+  const handleCardPress = (classId: string) => {
     setExpandedCards(prev => {
       const newSet = new Set(prev);
       if (newSet.has(classId)) {
@@ -238,23 +242,14 @@ const ClassManager: React.FC = () => {
     });
   };
 
-  const handleCardPress = (classId: string) => {
-    if (isSelectionMode) {
-      setSelectedClasses(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(classId)) {
-          newSet.delete(classId);
-          if (newSet.size === 0) {
-            setIsSelectionMode(false);
-          }
-        } else {
-          newSet.add(classId);
-        }
-        return newSet;
-      });
-    } else {
-      toggleCard(classId);
-    }
+  const handleEllipsisPress = (classId: string) => {
+    // Expand the card if not already expanded
+    setExpandedCards(prev => {
+      const newSet = new Set(prev);
+      newSet.add(classId);
+      return newSet;
+    });
+    setShowOptionsMenu(showOptionsMenu === classId ? null : classId);
   };
 
   const handleSelectAll = () => {
@@ -272,6 +267,15 @@ const ClassManager: React.FC = () => {
     setIsSelectionMode(false);
     setSelectedClasses(new Set());
     setIsAllSelected(false);
+  };
+
+  const handleViewClass = (classItem: Class) => {
+    navigation.navigate('ClassList', {
+      classId: classItem._id,
+      className: classItem.className,
+      subjectCode: classItem.subjectCode,
+      yearSection: classItem.yearSection,
+    });
   };
 
   const renderScheduleItem = (schedule: TimeSlot, index: number) => (
@@ -328,15 +332,13 @@ const ClassManager: React.FC = () => {
     const isSelected = selectedClasses.has(item._id);
     
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => handleCardPress(item._id)}
         style={[
           styles.classItem,
           isSelected && styles.selectedCard
         ]}
-        onPress={() => handleCardPress(item._id)}
-        onLongPress={() => handleLongPress(item._id)}
-        delayLongPress={500}
-        activeOpacity={0.7}
       >
         <View style={styles.classInfo}>
           <View style={styles.classHeader}>
@@ -358,15 +360,16 @@ const ClassManager: React.FC = () => {
             {!isSelectionMode && (
               <TouchableOpacity 
                 style={styles.optionsButton}
-                onPress={() => setShowOptionsMenu(showOptionsMenu === item._id ? null : item._id)}
+                onPress={(e) => {
+                  e.stopPropagation && e.stopPropagation();
+                  handleEllipsisPress(item._id);
+                }}
               >
                 <Ionicons name="ellipsis-vertical" size={20} color="#fff" />
               </TouchableOpacity>
             )}
           </View>
-          
           {renderOptionsMenu(item._id)}
-          
           {isExpanded && (
             <>
               {item.schedules.map((schedule, index) => (
@@ -382,6 +385,23 @@ const ClassManager: React.FC = () => {
               <Text style={styles.detailText}>Course: {item.course}</Text>
               <Text style={styles.detailText}>Room: {item.room}</Text>
               <Text style={styles.detailText}>Year/Section: {item.yearSection}</Text>
+              <TouchableOpacity
+                style={{
+                  marginTop: 10,
+                  backgroundColor: '#fff',
+                  borderRadius: 8,
+                  paddingVertical: 10,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#2eada6',
+                }}
+                onPress={(e) => {
+                  e.stopPropagation && e.stopPropagation();
+                  handleViewClass(item);
+                }}
+              >
+                <Text style={{ color: '#2eada6', fontWeight: 'bold', fontSize: 16 }}>View Class</Text>
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -721,7 +741,7 @@ const ClassManager: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2eada6',
+    backgroundColor: '#f5f5f5',
   },
   content: {
     flex: 1,
@@ -1264,4 +1284,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ClassManager; 
+export default AttendanceManager; 

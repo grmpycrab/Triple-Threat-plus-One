@@ -20,15 +20,22 @@ export const authenticateToken = async (
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
+  console.log('Auth middleware - Request URL:', req.url);
+  console.log('Auth middleware - Headers:', JSON.stringify(req.headers));
+  console.log('Auth middleware - Token present:', token ? 'Yes' : 'No');
+
   if (!token) {
+    console.log('Auth middleware - No authentication token provided');
     return res.status(401).json({ message: 'No authentication token provided' });
   }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as UserPayload;
     (req as AuthenticatedRequest).user = decoded;
+    console.log('Auth middleware - Token verified successfully. User:', decoded.id);
     next();
   } catch (err) {
+    console.error('Auth middleware - Token verification failed:', err);
     return res.status(403).json({ message: 'Invalid or expired token' });
   }
 };

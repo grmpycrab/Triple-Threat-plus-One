@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { StudentDrawerParamList } from '../navigation/types';
 
@@ -28,6 +28,12 @@ const StudentScreen: React.FC = () => {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{getHeaderTitle()}</Text>
         </View>
+        {user?.userId && (
+          <View style={styles.studentIdContainer}>
+            <Text style={styles.studentIdLabel}>Student ID:</Text>
+            <Text style={styles.studentIdValue}>{user.userId}</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView style={styles.container}>
@@ -352,6 +358,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#333',
     textAlign: 'center',
+  },
+  studentIdContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  studentIdLabel: {
+    fontSize: 12,
+    color: 'white',
+    marginRight: 4,
+  },
+  studentIdValue: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: 'bold',
   },
 });
 

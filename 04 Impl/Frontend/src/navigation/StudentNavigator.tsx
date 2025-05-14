@@ -1,15 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createDrawerNavigator } from '@react-navigation/drawer';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, StyleSheet, Switch, Text, TouchableOpacity, View, Animated, Dimensions } from 'react-native';
+import { Alert, Animated, Dimensions, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import ConfirmationModal from '../components/ConfirmationModal';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
-import StudentDashboard from '../screens/StudentScreen';
 import QRScanScreen from '../screens/QRScanScreen';
 import RecordsScreen from '../screens/RecordsScreen';
+import StudentDashboard from '../screens/StudentScreen';
 import { StudentDrawerParamList } from './types';
 
 const Drawer = createDrawerNavigator<StudentDrawerParamList>();
@@ -210,7 +210,7 @@ const CustomDrawerContent = ({ navigation }: any) => {
           <View style={styles.profileInfo}>
             <Text style={styles.username}>{user?.username || 'Student'}</Text>
             <Text style={styles.role}>{user?.role?.toUpperCase() || 'STUDENT'}</Text>
-            <Text style={styles.email}>{user?.email || 'student@example.com'}</Text>
+            <Text style={styles.email}>{user?.userId || 'No ID'}</Text>
           </View>
           <input
             type="file"

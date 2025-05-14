@@ -1,9 +1,21 @@
 export type RootStackParamList = {
   Splash: undefined;
   Login: undefined;
-  Admin: undefined;
-  Instructor: undefined;
   Student: undefined;
+  Instructor: undefined;
+  Admin: undefined;
+  AttendanceManager: undefined;
+  ClassList: {
+    classId: string;
+    className: string;
+    subjectCode: string;
+    yearSection: string;
+  };
+  TakeAttendance: {
+    classId: string;
+    subjectCode: string;
+    yearSection: string;
+  };
 };
 
 export type UserRole = 'student' | 'instructor' | 'admin';
@@ -16,9 +28,7 @@ export type AdminDrawerParamList = {
 
 export type InstructorDrawerParamList = {
   Dashboard: undefined;
-  AttendanceTracker: undefined;
-  ClassManager: undefined;
-  Notifications: undefined;
+  AttendanceManager: undefined;
   AboutApp: undefined;
   HelpSupport: undefined;
 };
@@ -30,6 +40,7 @@ export type StudentDrawerParamList = {
   PrivacySecurity: undefined;
   HelpSupport: undefined;
   AboutApp: undefined;
+  Records: undefined;
 };
 
 export type AttendanceNavigationParamList = {
@@ -46,6 +57,12 @@ export type ClassNavigationParamList = {
 
 export type InstructorBottomTabParamList = {
   InstructorDashboard: undefined;
-  AttendanceTracker: undefined;
-  ClassManager: undefined;
+  AttendanceManager: undefined;
+  Reports: undefined;
+};
+
+export type StudentBottomTabParamList = {
+  StudentDashboard: undefined;
+  Attendance: undefined;
+  Profile: undefined;
 }; 

@@ -1,13 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
-import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView, SafeAreaView, Platform, StatusBar } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StudentDrawerParamList } from '../navigation/types';
 
 type NavigationProp = DrawerNavigationProp<StudentDrawerParamList>;
 
 interface AttendanceRecord {
+  id: string;
   date: string;
   subject: string;
   class: string;
@@ -16,22 +18,58 @@ interface AttendanceRecord {
 
 const RecordsScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
-  const [selectedDate, setSelectedDate] = useState('March 26, 2025');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedSubject, setSelectedSubject] = useState('All Subjects');
   const [selectedClass, setSelectedClass] = useState('All Classes');
+  const [loading, setLoading] = useState(true);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
 
-  const attendanceRecords: AttendanceRecord[] = [
-    { date: '2025-03-26', subject: 'ITMSD4', class: 'IT3C', status: 'Present' },
-    { date: '2025-03-26', subject: 'ITMSD4', class: 'IT3C', status: 'Absent' },
-    { date: '2025-03-26', subject: 'ITMSD2', class: 'IT3C', status: 'Late' },
-    { date: '2025-03-24', subject: 'ITP134', class: 'IT3C', status: 'Present' },
-    { date: '2025-03-24', subject: 'ITC130', class: 'IT3C', status: 'Present' },
-    { date: '2025-03-24', subject: 'ITMSD3', class: 'IT3C', status: 'Present' },
-    { date: '2025-03-21', subject: 'ITMSD4', class: 'IT3C', status: 'Absent' },
-    { date: '2025-03-21', subject: 'ITMSD2', class: 'IT3C', status: 'Late' },
-    { date: '2025-03-20', subject: 'ITP134', class: 'IT3C', status: 'Present' },
-    { date: '2025-03-20', subject: 'ITC130', class: 'IT3C', status: 'Present' },
-  ];
+  useEffect(() => {
+    loadAttendanceRecords();
+
+    // Add listener to reload records when the screen is focused
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadAttendanceRecords();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadAttendanceRecords = async () => {
+    try {
+      setLoading(true);
+      const recordsJson = await AsyncStorage.getItem('attendance_records');
+      
+      if (recordsJson) {
+        const records: AttendanceRecord[] = JSON.parse(recordsJson);
+        setAttendanceRecords(records);
+      } else {
+        // If no records, set some sample data for better UX
+        const sampleRecords: AttendanceRecord[] = [
+          { id: '1', date: '2025-03-26', subject: 'ITMSD4', class: 'IT3C', status: 'Present' },
+          { id: '2', date: '2025-03-24', subject: 'ITP134', class: 'IT3C', status: 'Present' },
+          { id: '3', date: '2025-03-21', subject: 'ITMSD2', class: 'IT3C', status: 'Present' },
+        ];
+        setAttendanceRecords(sampleRecords);
+        
+        // Save sample records for future reference
+        await AsyncStorage.setItem('attendance_records', JSON.stringify(sampleRecords));
+      }
+    } catch (error) {
+      console.error('Error loading attendance records:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearAttendanceRecords = async () => {
+    try {
+      await AsyncStorage.removeItem('attendance_records');
+      setAttendanceRecords([]);
+    } catch (error) {
+      console.error('Error clearing attendance records:', error);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -46,8 +84,26 @@ const RecordsScreen: React.FC = () => {
     }
   };
 
+  const formatDate = (dateString: string) => {
+    const options: Intl.DateTimeFormatOptions = { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    };
+    return new Date(dateString).toLocaleDateString(undefined, options);
+  };
+
   const calculateStatistics = () => {
     const total = attendanceRecords.length;
+    if (total === 0) {
+      return {
+        present: { count: 0, percentage: 0 },
+        late: { count: 0, percentage: 0 },
+        absent: { count: 0, percentage: 0 },
+        total: 0,
+      };
+    }
+    
     const present = attendanceRecords.filter(record => record.status === 'Present').length;
     const late = attendanceRecords.filter(record => record.status === 'Late').length;
     const absent = attendanceRecords.filter(record => record.status === 'Absent').length;
@@ -70,6 +126,39 @@ const RecordsScreen: React.FC = () => {
   };
 
   const stats = calculateStatistics();
+  
+  // Get unique dates for the date filter
+  const getUniqueDates = () => {
+    const dates = attendanceRecords.map(record => record.date);
+    return [...new Set(dates)].sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+  };
+  
+  const uniqueDates = getUniqueDates();
+  const mostRecentDate = uniqueDates.length > 0 ? formatDate(uniqueDates[0]) : 'All Dates';
+
+  // Filter records based on selection
+  const getFilteredRecords = () => {
+    return attendanceRecords.filter(record => {
+      // Filter by date if selected
+      if (selectedDate && record.date !== selectedDate) {
+        return false;
+      }
+      
+      // Filter by subject if not "All Subjects"
+      if (selectedSubject !== 'All Subjects' && record.subject !== selectedSubject) {
+        return false;
+      }
+      
+      // Filter by class if not "All Classes"
+      if (selectedClass !== 'All Classes' && record.class !== selectedClass) {
+        return false;
+      }
+      
+      return true;
+    });
+  };
+
+  const filteredRecords = getFilteredRecords();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -93,11 +182,14 @@ const RecordsScreen: React.FC = () => {
           <View style={styles.filtersContainer}>
             <TouchableOpacity style={styles.filterButton}>
               <Ionicons name="calendar-outline" size={20} color="#666" />
-              <Text style={styles.filterButtonText}>{selectedDate}</Text>
+              <Text style={styles.filterButtonText}>{selectedDate ? formatDate(selectedDate) : mostRecentDate}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.filterButton}>
-              <Ionicons name="filter" size={20} color="#666" />
-              <Text style={styles.filterButtonText}>Filters</Text>
+            <TouchableOpacity 
+              style={styles.filterButton}
+              onPress={clearAttendanceRecords}
+            >
+              <Ionicons name="trash-outline" size={20} color="#666" />
+              <Text style={styles.filterButtonText}>Clear All</Text>
             </TouchableOpacity>
           </View>
 
@@ -109,7 +201,9 @@ const RecordsScreen: React.FC = () => {
             </View>
             <View style={styles.overviewCard}>
               <Text style={styles.overviewLabel}>Attendance Rate</Text>
-              <Text style={styles.overviewValue}>{Math.round((stats.present.percentage + stats.late.percentage / 2))}%</Text>
+              <Text style={styles.overviewValue}>
+                {stats.total > 0 ? Math.round((stats.present.percentage + stats.late.percentage / 2)) : 0}%
+              </Text>
             </View>
           </View>
 
@@ -135,65 +229,82 @@ const RecordsScreen: React.FC = () => {
           {/* Attendance Log */}
           <View style={styles.logContainer}>
             <Text style={styles.sectionTitle}>Attendance Log</Text>
-            <View style={styles.logHeader}>
-              <Text style={[styles.columnHeader, { flex: 1 }]}>Date</Text>
-              <Text style={[styles.columnHeader, { flex: 1 }]}>Subject</Text>
-              <Text style={[styles.columnHeader, { flex: 1 }]}>Class</Text>
-              <Text style={[styles.columnHeader, { flex: 1 }]}>Status</Text>
-            </View>
-            {attendanceRecords.map((record, index) => (
-              <View key={index} style={styles.logRow}>
-                <Text style={[styles.logText, { flex: 1 }]}>{record.date}</Text>
-                <Text style={[styles.logText, { flex: 1 }]}>{record.subject}</Text>
-                <Text style={[styles.logText, { flex: 1 }]}>{record.class}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(record.status) }]}>
-                  <Text style={styles.statusText}>{record.status}</Text>
-                </View>
+            
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#2eada6" />
+                <Text style={styles.loadingText}>Loading records...</Text>
               </View>
-            ))}
+            ) : filteredRecords.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="calendar-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyText}>No attendance records found</Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.logHeader}>
+                  <Text style={[styles.columnHeader, { flex: 1 }]}>Date</Text>
+                  <Text style={[styles.columnHeader, { flex: 1 }]}>Subject</Text>
+                  <Text style={[styles.columnHeader, { flex: 1 }]}>Class</Text>
+                  <Text style={[styles.columnHeader, { flex: 1 }]}>Status</Text>
+                </View>
+                {filteredRecords.map((record) => (
+                  <View key={record.id} style={styles.logRow}>
+                    <Text style={[styles.logText, { flex: 1 }]}>{formatDate(record.date)}</Text>
+                    <Text style={[styles.logText, { flex: 1 }]}>{record.subject}</Text>
+                    <Text style={[styles.logText, { flex: 1 }]}>{record.class}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(record.status) }]}>
+                      <Text style={styles.statusText}>{record.status}</Text>
+                    </View>
+                  </View>
+                ))}
+              </>
+            )}
           </View>
 
           {/* Attendance Statistics */}
-          <View style={styles.statisticsContainer}>
-            <Text style={styles.sectionTitle}>Attendance Statistics</Text>
-            <Text style={styles.statisticsSubtitle}>Your attendance breakdown for the current semester</Text>
-            
-            {/* Present Bar */}
-            <View style={styles.statRow}>
-              <View style={styles.statLabelContainer}>
-                <View style={[styles.statDot, { backgroundColor: '#4CAF50' }]} />
-                <Text style={styles.statLabel}>Present</Text>
+          {stats.total > 0 && (
+            <View style={styles.statisticsContainer}>
+              <Text style={styles.sectionTitle}>Attendance Statistics</Text>
+              <Text style={styles.statisticsSubtitle}>Your attendance breakdown for the current semester</Text>
+              
+              {/* Present Bar */}
+              <View style={styles.statRow}>
+                <View style={styles.statLabelContainer}>
+                  <View style={[styles.statDot, { backgroundColor: '#4CAF50' }]} />
+                  <Text style={styles.statLabel}>Present</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${stats.present.percentage}%`, backgroundColor: '#4CAF50' }]} />
+                </View>
+                <Text style={styles.statValue}>{stats.present.count} days ({Math.round(stats.present.percentage)}%)</Text>
               </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { width: `${stats.present.percentage}%`, backgroundColor: '#4CAF50' }]} />
-              </View>
-              <Text style={styles.statValue}>{stats.present.count} days ({Math.round(stats.present.percentage)}%)</Text>
-            </View>
 
-            {/* Late Bar */}
-            <View style={styles.statRow}>
-              <View style={styles.statLabelContainer}>
-                <View style={[styles.statDot, { backgroundColor: '#FFA726' }]} />
-                <Text style={styles.statLabel}>Late</Text>
+              {/* Late Bar */}
+              <View style={styles.statRow}>
+                <View style={styles.statLabelContainer}>
+                  <View style={[styles.statDot, { backgroundColor: '#FFA726' }]} />
+                  <Text style={styles.statLabel}>Late</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${stats.late.percentage}%`, backgroundColor: '#FFA726' }]} />
+                </View>
+                <Text style={styles.statValue}>{stats.late.count} days ({Math.round(stats.late.percentage)}%)</Text>
               </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { width: `${stats.late.percentage}%`, backgroundColor: '#FFA726' }]} />
-              </View>
-              <Text style={styles.statValue}>{stats.late.count} days ({Math.round(stats.late.percentage)}%)</Text>
-            </View>
 
-            {/* Absent Bar */}
-            <View style={styles.statRow}>
-              <View style={styles.statLabelContainer}>
-                <View style={[styles.statDot, { backgroundColor: '#FF6B6B' }]} />
-                <Text style={styles.statLabel}>Absent</Text>
+              {/* Absent Bar */}
+              <View style={styles.statRow}>
+                <View style={styles.statLabelContainer}>
+                  <View style={[styles.statDot, { backgroundColor: '#FF6B6B' }]} />
+                  <Text style={styles.statLabel}>Absent</Text>
+                </View>
+                <View style={styles.progressBarContainer}>
+                  <View style={[styles.progressBar, { width: `${stats.absent.percentage}%`, backgroundColor: '#FF6B6B' }]} />
+                </View>
+                <Text style={styles.statValue}>{stats.absent.count} days ({Math.round(stats.absent.percentage)}%)</Text>
               </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { width: `${stats.absent.percentage}%`, backgroundColor: '#FF6B6B' }]} />
-              </View>
-              <Text style={styles.statValue}>{stats.absent.count} days ({Math.round(stats.absent.percentage)}%)</Text>
             </View>
-          </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -322,6 +433,24 @@ const styles = StyleSheet.create({
     color: '#333',
     padding: 16,
     paddingBottom: 8,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: '#666',
+    fontSize: 14,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    marginTop: 12,
+    color: '#666',
+    fontSize: 14,
   },
   logHeader: {
     flexDirection: 'row',

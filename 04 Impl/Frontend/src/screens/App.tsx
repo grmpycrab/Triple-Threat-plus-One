@@ -1,32 +1,20 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import ViewClass from '../components/attendance/ViewClass';
 import { useAuth } from '../context/AuthContext';
 import AdminNavigator from '../navigation/AdminNavigator';
 import InstructorNavigator from '../navigation/InstructorNavigator';
 import StudentNavigator from '../navigation/StudentNavigator';
 import { RootStackParamList } from '../navigation/types';
 import Login from './Login';
-import SplashScreen from './SplashScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
-  const [isFirstLoad, setIsFirstLoad] = useState(true);
-
-  useEffect(() => {
-    if (!loading) {
-      // After the initial loading is complete, set isFirstLoad to false after splash screen duration
-      const timer = setTimeout(() => {
-        setIsFirstLoad(false);
-      }, 3500); // Match this with the total duration of splash screen animations
-
-      return () => clearTimeout(timer);
-    }
-  }, [loading]);
 
   if (loading) {
     return (
@@ -45,32 +33,27 @@ const App: React.FC = () => {
             animation: 'fade'
           }}
         >
-          {isFirstLoad ? (
-            <Stack.Screen name="Splash" component={SplashScreen} />
-          ) : (
+          <Stack.Screen name="Login" component={Login} />
+          <Stack.Screen name="ClassList" component={ViewClass} />
+          {user && (
             <>
-              <Stack.Screen name="Login" component={Login} />
-              {user && (
-                <>
-                  {user.role === 'admin' && (
-                    <Stack.Screen 
-                      name="Admin" 
-                      component={AdminNavigator}
-                    />
-                  )}
-                  {user.role === 'instructor' && (
-                    <Stack.Screen 
-                      name="Instructor" 
-                      component={InstructorNavigator}
-                    />
-                  )}
-                  {user.role === 'student' && (
-                    <Stack.Screen 
-                      name="Student" 
-                      component={StudentNavigator}
-                    />
-                  )}
-                </>
+              {user.role === 'admin' && (
+                <Stack.Screen 
+                  name="Admin" 
+                  component={AdminNavigator}
+                />
+              )}
+              {user.role === 'instructor' && (
+                <Stack.Screen 
+                  name="Instructor" 
+                  component={InstructorNavigator}
+                />
+              )}
+              {user.role === 'student' && (
+                <Stack.Screen 
+                  name="Student" 
+                  component={StudentNavigator}
+                />
               )}
             </>
           )}
