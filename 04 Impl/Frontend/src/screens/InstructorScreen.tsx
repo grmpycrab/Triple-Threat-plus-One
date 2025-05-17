@@ -2,14 +2,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import ClassManager, { Class } from '../components/attendance/AttendanceManager';
-import QRGenerator from '../components/attendance/QRGenerator';
-import Reports from '../components/Reports';
+import ClassScheduleCalendar from '../components/ClassScheduleCalendar';
+import Reports from '../components/instructor/AttendanceReports';
+import ClassManager, { Class } from '../components/instructor/ClassManager';
+import QRGenerator from '../components/instructor/QRGenerator';
+import SubjectSelectionDrawer from '../components/instructor/SubjectSelectionDrawer';
 import { useAuth } from '../context/AuthContext';
-import { InstructorBottomTabParamList, InstructorDrawerParamList } from '../navigation/types';
-import { attendanceAPI, classAPI } from '../services/api';
+import { InstructorBottomTabParamList, InstructorDrawerParamList, RootStackParamList } from '../navigation/types';
+import { classAPI, reportAPI } from '../services/api';
 
 type NavigationProp = DrawerNavigationProp<InstructorDrawerParamList>;
 const Tab = createBottomTabNavigator<InstructorBottomTabParamList>();
@@ -54,6 +57,10 @@ const InstructorDashboard: React.FC<{ classes: Class[]; attendanceData: { date: 
   const [showQRModal, setShowQRModal] = useState(false);
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [todayClasses, setTodayClasses] = useState<Class[]>([]);
+  const [showSubjectsModal, setShowSubjectsModal] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<'attendance' | 'view'>('attendance');
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
   const [classOverview, setClassOverview] = useState({
     totalClasses: 0,
     activeClasses: 0,
@@ -61,6 +68,7 @@ const InstructorDashboard: React.FC<{ classes: Class[]; attendanceData: { date: 
     averageAttendance: 0,
     ongoingClasses: 0
   });
+  const [isOverviewExpanded, setIsOverviewExpanded] = useState(false);
 
   useEffect(() => {
     filterTodayClasses();
@@ -137,14 +145,16 @@ const InstructorDashboard: React.FC<{ classes: Class[]; attendanceData: { date: 
 
   const calculateClassOverview = async () => {
     try {
-      let totalStudents = 0;
-      let totalAttendance = 0;
-      let ongoingClasses = 0;
-      
-      // Calculate ongoing classes
+      // Get today's date and 7 days ago for report fetching
       const today = new Date();
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 7);
+
+      // Get current time for ongoing classes calculation
       const currentTime = today.toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
       
+      // Calculate ongoing classes
+      let ongoingClasses = 0;
       todayClasses.forEach(classItem => {
         classItem.schedules.forEach(schedule => {
           if (isTimeInRange(currentTime, `${schedule.startTime} ${schedule.startPeriod}`, `${schedule.endTime} ${schedule.endPeriod}`)) {
@@ -153,27 +163,73 @@ const InstructorDashboard: React.FC<{ classes: Class[]; attendanceData: { date: 
         });
       });
 
-      // Calculate total students and average attendance
-      for (const classItem of classes) {
-        const response = await attendanceAPI.getAttendanceByClass(classItem._id);
-        if (response.stats) {
-          totalStudents += response.stats.total || 0;
-          totalAttendance += response.stats.present || 0;
-        }
-      }
+      // Fetch reports for the last 7 days
+      const reports = await reportAPI.getAllReports(
+        sevenDaysAgo.toISOString().split('T')[0],
+        today.toISOString().split('T')[0]
+      );
+
+      // Calculate total students and attendance from reports
+      const stats = reports.reduce((acc: { 
+        totalStudents: number; 
+        presentCount: number; 
+        reportCount: number; 
+      }, report: { 
+        totalStudents: number; 
+        presentCount: number; 
+      }) => ({
+        totalStudents: acc.totalStudents + report.totalStudents,
+        presentCount: acc.presentCount + report.presentCount,
+        reportCount: acc.reportCount + 1
+      }), { totalStudents: 0, presentCount: 0, reportCount: 0 });
+
+      // Calculate average attendance percentage
+      const averageAttendance = stats.reportCount > 0
+        ? Math.round((stats.presentCount / stats.totalStudents) * 100)
+        : 0;
 
       setClassOverview({
         totalClasses: classes.length,
         activeClasses: todayClasses.length,
-        totalStudents,
-        averageAttendance: totalStudents > 0 
-          ? Math.round((totalAttendance / totalStudents) * 100) 
-          : 0,
+        totalStudents: Math.round(stats.totalStudents / (stats.reportCount || 1)), // Average students per report
+        averageAttendance,
         ongoingClasses
       });
     } catch (error) {
       console.error('Error calculating class overview:', error);
+      // Set default values if there's an error
+      setClassOverview({
+        totalClasses: classes.length,
+        activeClasses: todayClasses.length,
+        totalStudents: 0,
+        averageAttendance: 0,
+        ongoingClasses: 0
+      });
     }
+  };
+
+  const handleQuickAction = (action: 'attendance' | 'students' | 'schedule') => {
+    if (action === 'schedule') {
+      setShowScheduleModal(true);
+    } else {
+      setDrawerMode(action === 'attendance' ? 'attendance' : 'view');
+      setShowSubjectsModal(true);
+    }
+  };
+
+  const handleClassSelect = (classItem: Class) => {
+    setSelectedClass(classItem);
+    if (drawerMode === 'attendance') {
+      setShowQRModal(true);
+    } else {
+      navigation.navigate('ClassList', {
+        classId: classItem._id,
+        className: classItem.className,
+        subjectCode: classItem.subjectCode,
+        yearSection: classItem.yearSection || '',
+      });
+    }
+    setShowSubjectsModal(false);
   };
 
   return (
@@ -181,25 +237,49 @@ const InstructorDashboard: React.FC<{ classes: Class[]; attendanceData: { date: 
       <View style={styles.contentContainer}>
         {/* Class Overview Card */}
         <View style={styles.card}>
+          <TouchableOpacity 
+            style={styles.overviewHeader}
+            onPress={() => setIsOverviewExpanded(!isOverviewExpanded)}
+          >
+            <View>
           <Text style={styles.cardTitle}>Class Overview</Text>
-          <View style={styles.overviewGrid}>
-            <View style={[styles.overviewItem, { backgroundColor: '#e8f5f4' }]}>
-              <Text style={[styles.overviewValue, { color: '#2eada6' }]}>{classOverview.totalClasses}</Text>
-              <Text style={styles.overviewLabel}>Total Classes</Text>
+              <Text style={styles.subTitle}>Today's Statistics</Text>
             </View>
-            <View style={[styles.overviewItem, { backgroundColor: '#f0e8f5' }]}>
-              <Text style={[styles.overviewValue, { color: '#8a2be2' }]}>{classOverview.activeClasses}</Text>
-              <Text style={styles.overviewLabel}>Today's Classes</Text>
-            </View>
-            <View style={[styles.overviewItem, { backgroundColor: '#fff4e6' }]}>
-              <Text style={[styles.overviewValue, { color: '#ff9f43' }]}>{classOverview.ongoingClasses}</Text>
-              <Text style={styles.overviewLabel}>Ongoing Classes</Text>
-            </View>
-            <View style={[styles.overviewItem, { backgroundColor: '#e8f0f5' }]}>
-              <Text style={[styles.overviewValue, { color: '#4a90e2' }]}>{classOverview.averageAttendance}%</Text>
-              <Text style={styles.overviewLabel}>Avg. Attendance</Text>
+            <Ionicons 
+              name={isOverviewExpanded ? "chevron-up" : "chevron-down"} 
+              size={24} 
+              color="#2eada6" 
+            />
+          </TouchableOpacity>
+
+          <View style={styles.overviewStats}>
+            <View style={styles.statCircle}>
+              <Text style={styles.statPercentage}>{classOverview.averageAttendance}%</Text>
+              <Text style={styles.statLabel}>Average</Text>
+              <Text style={styles.statLabel}>Attendance</Text>
             </View>
           </View>
+
+          {isOverviewExpanded && (
+            <View style={styles.detailedStats}>
+              <View style={styles.statRow}>
+                <Text style={styles.statTitle}>Total Classes</Text>
+                <Text style={styles.statValue}>{classOverview.totalClasses}</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statTitle}>Today's Classes</Text>
+                <Text style={styles.statValue}>{classOverview.activeClasses}</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statTitle}>Ongoing Classes</Text>
+                <Text style={[styles.statValue, { color: '#4CAF50' }]}>{classOverview.ongoingClasses}</Text>
+              </View>
+              <View style={styles.statRow}>
+                <Text style={styles.statTitle}>Total Students</Text>
+                <Text style={styles.statValue}>{classOverview.totalStudents}</Text>
+            </View>
+            </View>
+          )}
         </View>
 
         {/* Today's Schedule Card */}
@@ -278,30 +358,48 @@ const InstructorDashboard: React.FC<{ classes: Class[]; attendanceData: { date: 
         {/* Quick Actions Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Quick Actions</Text>
-          <Text style={styles.subTitle}>Common tasks</Text>
-          <View style={styles.actionButtons}>
+          <Text style={styles.subTitle}>Access frequently used features</Text>
+          <View style={styles.actionButtonsRow}>
             <TouchableOpacity 
-              style={[styles.actionButton, { backgroundColor: '#e8f5f4' }]}
-              onPress={() => setShowQRModal(true)}
+              style={[styles.actionButton, { backgroundColor: '#e8f5f4', borderColor: '#2eada6', borderWidth: 1 }]}
+              onPress={() => handleQuickAction('attendance')}
             >
-              <Ionicons name="qr-code" size={24} color="#2eada6" />
-              <Text style={[styles.actionText, { color: '#2eada6' }]}>Generate QR</Text>
+              <Ionicons name="qr-code" size={22} color="#2eada6" />
+              <Text style={[styles.actionText, { color: '#2eada6' }]}>Attendance</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#f0e8f5' }]}>
-              <Ionicons name="people" size={24} color="#8a2be2" />
-              <Text style={[styles.actionText, { color: '#8a2be2' }]}>View Students</Text>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#e8f5f4', borderColor: '#2eada6', borderWidth: 1 }]}
+              onPress={() => handleQuickAction('students')}
+            >
+              <Ionicons name="people" size={22} color="#2eada6" />
+              <Text style={[styles.actionText, { color: '#2eada6' }]}>Students</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#fff4e6' }]}>
-              <Ionicons name="checkbox" size={24} color="#ff9f43" />
-              <Text style={[styles.actionText, { color: '#ff9f43' }]}>Take Attendance</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#e8f0f5' }]}>
-              <Ionicons name="calendar" size={24} color="#4a90e2" />
-              <Text style={[styles.actionText, { color: '#4a90e2' }]}>Schedule</Text>
+            <TouchableOpacity 
+              style={[styles.actionButton, { backgroundColor: '#e8f5f4', borderColor: '#2eada6', borderWidth: 1 }]}
+              onPress={() => handleQuickAction('schedule')}
+            >
+              <Ionicons name="calendar" size={22} color="#2eada6" />
+              <Text style={[styles.actionText, { color: '#2eada6' }]}>Schedule</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      {/* Subject Selection Drawer */}
+      <SubjectSelectionDrawer
+        visible={showSubjectsModal}
+        onClose={() => setShowSubjectsModal(false)}
+        classes={classes}
+        onSelectClass={handleClassSelect}
+        mode={drawerMode}
+      />
+
+      {/* Schedule Calendar Modal */}
+      <ClassScheduleCalendar
+        visible={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        classes={classes}
+      />
 
       {/* QR Generator Modal */}
       {selectedClass && (
@@ -368,13 +466,13 @@ const InstructorScreen: React.FC = () => {
   const getHeaderTitle = () => {
     switch (activeTab) {
       case 'InstructorDashboard':
-        return 'Instructor Dashboard';
+        return 'Dashboard';
       case 'AttendanceManager':
-        return 'Attendance Manager';
+        return 'Class Manager';
       case 'Reports':
-        return 'Reports';
+        return 'Attendance Reports';
       default:
-        return 'Instructor Dashboard';
+        return 'Dashboard';
     }
   };
 
@@ -553,32 +651,66 @@ const styles = StyleSheet.create({
   subTitle: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 15,
+    marginBottom: 20,
   },
-  overviewGrid: {
+  overviewHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginTop: 15,
-  },
-  overviewItem: {
-    width: '48%',
-    backgroundColor: '#f8f8f8',
-    padding: 15,
-    borderRadius: 12,
     alignItems: 'center',
     marginBottom: 15,
   },
-  overviewValue: {
-    fontSize: 24,
+  overviewStats: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+  },
+  statCircle: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#2eada6',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+  },
+  statPercentage: {
+    fontSize: 32,
     fontWeight: 'bold',
     color: '#2eada6',
     marginBottom: 4,
   },
-  overviewLabel: {
+  statLabel: {
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+  },
+  detailedStats: {
+    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    paddingTop: 20,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  statTitle: {
+    fontSize: 14,
+    color: '#666',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2eada6',
   },
   classList: {
     gap: 15,
@@ -648,23 +780,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  actionButtons: {
+  actionButtonsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 10,
+    alignItems: 'center',
+    marginTop: 10,
   },
   actionButton: {
-    width: '48%',
+    width: '30%',
     padding: 15,
     borderRadius: 12,
     alignItems: 'center',
-    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 3,
   },
   actionText: {
+    fontSize: 12,
+    fontWeight: '600',
     marginTop: 8,
-    fontSize: 14,
-    fontWeight: '500',
     textAlign: 'center',
   },
   noClassesContainer: {
@@ -728,6 +867,69 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     color: '#666',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  bottomDrawerContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginVertical: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#2eada6',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  subjectList: {
+    paddingBottom: 20,
+  },
+  subjectItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  subjectName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  subjectCode: {
+    fontSize: 14,
+    color: '#666',
+  },
+  closeButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    padding: 8,
   },
 });
 

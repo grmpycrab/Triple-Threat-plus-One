@@ -1,9 +1,9 @@
 import express from 'express';
 import {
-    deleteReport,
-    getAllReports,
-    getReportsByClass,
-    saveReport
+  deleteReport,
+  getAllReports,
+  getReportsByClass,
+  saveReport
 } from '../controllers/reportController';
 import { authenticateToken } from '../middleware/auth';
 

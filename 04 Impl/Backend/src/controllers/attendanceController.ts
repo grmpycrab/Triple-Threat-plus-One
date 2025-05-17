@@ -23,36 +23,16 @@ export const submitAttendance = async (req: Request, res: Response) => {
     try {
       console.log(`Attendance submission attempt: classId=${classId}, studentId=${studentId}`);
       
-      // First try: direct lookup without any conversion
       student = await Student.findOne({ 
         classId, 
         studentId 
       });
-      console.log(`Direct lookup result: ${student ? 'Found' : 'Not found'}`);
       
-      // Second try: converting both to strings
       if (!student) {
         student = await Student.findOne({ 
           classId: classId.toString(), 
           studentId: studentId.toString() 
         });
-        console.log(`String conversion lookup result: ${student ? 'Found' : 'Not found'}`);
-      }
-      
-      // Third try: lookup by just studentId (ignoring class)
-      if (!student) {
-        const studentByIdOnly = await Student.findOne({ studentId });
-        console.log(`Student found by ID only (ignoring class): ${studentByIdOnly ? 'Yes' : 'No'}`);
-        // Don't assign to student - just log for debugging
-      }
-      
-      // Check if student exists in any class in database
-      if (!student) {
-        const allStudentsWithId = await Student.find({ studentId });
-        console.log(`Total students found with ID ${studentId} in database: ${allStudentsWithId.length}`);
-        if (allStudentsWithId.length > 0) {
-          console.log(`Classes these students belong to: ${allStudentsWithId.map(s => s.classId).join(', ')}`);
-        }
       }
       
       if (!student) {
@@ -69,70 +49,120 @@ export const submitAttendance = async (req: Request, res: Response) => {
       });
     }
     
-    // Check for duplicate attendance within the same day
+    // Check for existing attendance within the same day
     const today = new Date(timestamp || Date.now());
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
     
-    const existingAttendance = await Attendance.findOne({
-      classId,
-      studentId,
-      timestamp: {
-        $gte: startOfDay,
-        $lte: endOfDay
-      }
-    });
-    
-    if (existingAttendance) {
-      // Update existing record instead of creating a duplicate
-      console.log(`Existing attendance found for student ${studentId} in class ${classId} today. Updating record.`);
-      
-      existingAttendance.status = status || existingAttendance.status;
-      existingAttendance.recordedVia = recordedVia || existingAttendance.recordedVia;
-      existingAttendance.studentName = studentName || existingAttendance.studentName;
-      
-      if (deviceInfo) existingAttendance.deviceInfo = deviceInfo;
-      if (ipAddress) existingAttendance.ipAddress = ipAddress;
-      if (location) existingAttendance.location = location;
-      
-      await existingAttendance.save();
-      
-      console.log(`Attendance record updated successfully: ${existingAttendance._id}`);
-      
-      return res.status(200).json({
-        message: 'Attendance record updated',
-        attendance: existingAttendance
-      });
-    }
-    
-    // Create new attendance record
+    let attendance;
     try {
-      const attendanceData = {
+      attendance = await Attendance.findOne({
         classId,
         studentId,
-        studentName,
-        timestamp: timestamp || new Date(),
-        status: status || 'present',
-        recordedVia: recordedVia || 'qr',
-        deviceInfo,
-        ipAddress,
-        location
+        timestamp: {
+          $gte: startOfDay,
+          $lte: endOfDay
+        }
+      });
+      
+      if (attendance) {
+        // Store the previous status before updating
+        const previousStatus = attendance.status;
+        
+        // Update existing record
+        console.log(`Updating existing attendance record for student ${studentId} in class ${classId}`);
+        console.log(`Previous status: ${previousStatus}, New status: ${status}`);
+        
+        attendance.status = status;
+        attendance.recordedVia = recordedVia || attendance.recordedVia;
+        attendance.studentName = studentName || attendance.studentName;
+        
+        if (deviceInfo) attendance.deviceInfo = deviceInfo;
+        if (ipAddress) attendance.ipAddress = ipAddress;
+        if (location) attendance.location = location;
+        
+        await attendance.save();
+        
+        // Update student's attendance stats
+        if (previousStatus !== status) {
+          const update: any = {
+            $inc: {}
+          };
+          
+          // Decrement the previous status count
+          update.$inc[`attendanceStats.${previousStatus}`] = -1;
+          // Increment the new status count
+          update.$inc[`attendanceStats.${status}`] = 1;
+          
+          await Student.findOneAndUpdate(
+            { studentId },
+            update,
+            { new: true }
+          );
+        }
+        
+        console.log(`Attendance record updated successfully: ${attendance._id}`);
+      } else {
+        // Create new attendance record
+        const attendanceData = {
+          classId,
+          studentId,
+          studentName,
+          timestamp: timestamp || new Date(),
+          status: status || 'present',
+          recordedVia: recordedVia || 'qr',
+          deviceInfo,
+          ipAddress,
+          location
+        };
+        
+        console.log('Creating new attendance record with data:', JSON.stringify(attendanceData));
+        
+        attendance = await Attendance.create(attendanceData);
+        
+        // Update student's attendance stats for new record
+        await Student.findOneAndUpdate(
+          { studentId },
+          { 
+            $inc: { 
+              [`attendanceStats.${status || 'present'}`]: 1
+            }
+          },
+          { new: true }
+        );
+        
+        console.log('Attendance record created successfully:', attendance._id);
+      }
+      
+      // Get updated attendance stats for the class on this day
+      const dayAttendance = await Attendance.find({
+        classId,
+        timestamp: {
+          $gte: startOfDay,
+          $lte: endOfDay
+        }
+      });
+      
+      const stats = {
+        total: dayAttendance.length,
+        present: dayAttendance.filter(a => a.status === 'present').length,
+        absent: dayAttendance.filter(a => a.status === 'absent').length
       };
       
-      console.log('Creating attendance record with data:', JSON.stringify(attendanceData));
+      // Get updated student stats
+      const updatedStudent = await Student.findOne({ studentId });
       
-      const attendance = await Attendance.create(attendanceData);
-      
-      console.log('Attendance record created successfully:', attendance._id);
-      
-      res.status(201).json({
-        message: 'Attendance recorded successfully',
-        attendance
+      res.status(attendance ? 200 : 201).json({
+        message: attendance ? 'Attendance record updated' : 'Attendance recorded successfully',
+        attendance,
+        stats,
+        studentStats: updatedStudent?.attendanceStats
       });
+      
     } catch (error: any) {
-      console.error('Error creating attendance record:', error);
+      console.error('Error processing attendance:', error);
       res.status(500).json({ 
-        message: 'Error creating attendance record', 
+        message: 'Error processing attendance', 
         error: error.message 
       });
     }
@@ -364,5 +394,19 @@ export const bulkUpdateAttendance = async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error in bulk attendance update:', error);
     res.status(500).json({ message: 'Error updating attendance', error });
+  }
+};
+
+// Get all attendance records
+export const getAllAttendance = async (req: Request, res: Response) => {
+  try {
+    const attendance = await Attendance.find()
+      .sort({ timestamp: -1 })
+      .populate('classId', 'className subjectCode yearSection');
+    
+    res.json(attendance);
+  } catch (error) {
+    console.error('Error fetching all attendance:', error);
+    res.status(500).json({ message: 'Error fetching all attendance records', error });
   }
 }; 

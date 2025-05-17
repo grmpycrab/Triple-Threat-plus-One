@@ -2,9 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import ClassManager from '../components/attendance/AttendanceManager';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AboutAppDrawer from '../components/AboutAppDrawer';
+import ChangePasswordDrawer from '../components/ChangePasswordDrawer';
 import ConfirmationModal from '../components/ConfirmationModal';
+import NotificationsDrawer from '../components/NotificationsDrawer';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
 import InstructorDashboard from '../screens/InstructorScreen';
@@ -14,6 +16,15 @@ const Drawer = createDrawerNavigator<InstructorDrawerParamList>();
 
 const PROFILE_IMAGE_KEY = '@instructor_profile_image';
 
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  type: 'upcoming' | 'ongoing' | 'ended';
+  read: boolean;
+}
+
 const CustomDrawerContent = ({ navigation }: any) => {
   const { logout, user } = useAuth();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -22,12 +33,94 @@ const CustomDrawerContent = ({ navigation }: any) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
 
   useEffect(() => {
     loadProfileImage();
-    loadNotificationSettings();
+    generateNotifications();
+    // Set up interval to update notifications every minute
+    const interval = setInterval(generateNotifications, 60000);
+    return () => clearInterval(interval);
   }, []);
+
+  const generateNotifications = () => {
+    const currentTime = new Date();
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+
+    // Get today's schedule from InstructorScreen's todayClasses
+    const todayClasses = window.todayClasses || [];
+
+    const newNotifications: Notification[] = todayClasses.flatMap(classItem => {
+      return classItem.schedules.map((schedule) => {
+        const [startHour, startMinute] = schedule.startTime.split(':').map(Number);
+        const [endHour, endMinute] = schedule.endTime.split(':').map(Number);
+        const adjustedStartHour = schedule.startPeriod === 'PM' && startHour !== 12 ? startHour + 12 : startHour;
+        const adjustedEndHour = schedule.endPeriod === 'PM' && endHour !== 12 ? endHour + 12 : endHour;
+
+        const startTimeDate = new Date(
+          currentTime.getFullYear(),
+          currentTime.getMonth(),
+          currentTime.getDate(),
+          adjustedStartHour,
+          startMinute
+        );
+
+        const endTimeDate = new Date(
+          currentTime.getFullYear(),
+          currentTime.getMonth(),
+          currentTime.getDate(),
+          adjustedEndHour,
+          endMinute
+        );
+
+        const timeDiffStart = startTimeDate.getTime() - currentTime.getTime();
+        const minutesUntilStart = Math.floor(timeDiffStart / (1000 * 60));
+
+        let type: 'upcoming' | 'ongoing' | 'ended';
+        let message: string;
+
+        if (currentTime < startTimeDate && minutesUntilStart <= 30) {
+          type = 'upcoming';
+          message = `Starting in ${minutesUntilStart} minute${minutesUntilStart !== 1 ? 's' : ''}`;
+        } else if (currentTime >= startTimeDate && currentTime <= endTimeDate) {
+          type = 'ongoing';
+          message = 'Class is currently in session';
+        } else if (currentTime > endTimeDate && (currentTime.getTime() - endTimeDate.getTime()) <= 30 * 60 * 1000) {
+          type = 'ended';
+          message = 'Class has ended recently';
+        } else {
+          return null;
+        }
+
+        return {
+          id: `${classItem._id}-${schedule.startTime}-${schedule.endTime}`,
+          title: `${classItem.subjectCode} - ${classItem.className}`,
+          message,
+          time: `${schedule.startTime} ${schedule.startPeriod} - ${schedule.endTime} ${schedule.endPeriod}`,
+          type,
+          read: false
+        };
+      });
+    }).filter((notification): notification is Notification => notification !== null);
+
+    setNotifications(newNotifications);
+  };
+
+  const getUnreadCount = () => {
+    return notifications.filter(n => !n.read).length;
+  };
+
+  const markAsRead = (notificationId: string) => {
+    setNotifications(prev =>
+      prev.map(n =>
+        n.id === notificationId ? { ...n, read: true } : n
+      )
+    );
+  };
 
   const loadProfileImage = async () => {
     try {
@@ -37,15 +130,6 @@ const CustomDrawerContent = ({ navigation }: any) => {
       }
     } catch (error) {
       console.error('Error loading profile image:', error);
-    }
-  };
-
-  const loadNotificationSettings = async () => {
-    try {
-      const savedSetting = await AsyncStorage.getItem('@notifications_enabled');
-      setNotificationsEnabled(savedSetting !== 'false');
-    } catch (error) {
-      console.error('Error loading notification settings:', error);
     }
   };
 
@@ -105,16 +189,6 @@ const CustomDrawerContent = ({ navigation }: any) => {
     }
   };
 
-  const toggleNotifications = async (value: boolean) => {
-    setNotificationsEnabled(value);
-    try {
-      await AsyncStorage.setItem('@notifications_enabled', value.toString());
-      showSuccessNotification(value ? 'Notifications enabled' : 'Notifications disabled');
-    } catch (error) {
-      console.error('Error saving notification settings:', error);
-    }
-  };
-
   const handleLogoutPress = () => {
     setShowConfirmModal(true);
   };
@@ -124,13 +198,9 @@ const CustomDrawerContent = ({ navigation }: any) => {
       setShowConfirmModal(false);
       setShowSuccessModal(true);
       
-      // First wait for a short delay to show the modal
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Then perform logout
       await logout();
 
-      // Wait for the success modal to be visible
       setTimeout(() => {
         setShowSuccessModal(false);
         navigation.reset({
@@ -194,48 +264,48 @@ const CustomDrawerContent = ({ navigation }: any) => {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.menuItems}>
+        {/* Notifications */}
       <TouchableOpacity
-        style={[styles.drawerItem, styles.notificationItem]}
-        onPress={() => {}}
-        activeOpacity={1}
+          style={styles.drawerItem}
+          onPress={() => setShowNotificationsModal(true)}
       >
-        <View style={styles.drawerItemLeft}>
           <Ionicons name="notifications-outline" size={24} color="#2eada6" />
           <Text style={styles.drawerItemText}>Notifications</Text>
+          {getUnreadCount() > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.badgeText}>{getUnreadCount()}</Text>
         </View>
-        <Switch
-          value={notificationsEnabled}
-          onValueChange={toggleNotifications}
-          trackColor={{ false: '#d4d4d4', true: '#93d5d1' }}
-          thumbColor={notificationsEnabled ? '#2eada6' : '#f4f3f4'}
-          ios_backgroundColor="#d4d4d4"
-          style={styles.notificationToggle}
-        />
+          )}
+        </TouchableOpacity>
+
+        {/* Change Password */}
+        <TouchableOpacity
+          style={styles.drawerItem}
+          onPress={() => setShowChangePasswordModal(true)}
+        >
+          <Ionicons name="lock-closed-outline" size={24} color="#2eada6" />
+          <Text style={styles.drawerItemText}>Change Password</Text>
       </TouchableOpacity>
 
+        {/* About App */}
       <TouchableOpacity
         style={styles.drawerItem}
-        onPress={() => navigation.navigate('AboutApp')}
+          onPress={() => setShowAboutModal(true)}
       >
         <Ionicons name="information-circle-outline" size={24} color="#2eada6" />
         <Text style={styles.drawerItemText}>About App</Text>
       </TouchableOpacity>
 
+        {/* Logout Button */}
       <TouchableOpacity
-        style={styles.drawerItem}
-        onPress={() => navigation.navigate('HelpSupport')}
-      >
-        <Ionicons name="help-circle-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Help & Support</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.drawerItem, styles.logoutButton]}
+          style={[styles.drawerItem, { borderTopWidth: 1, borderTopColor: '#f0f0f0', marginTop: 0 }]}
         onPress={handleLogoutPress}
       >
         <Ionicons name="log-out-outline" size={24} color="#ff6b6b" />
-        <Text style={[styles.drawerItemText, styles.logoutText]}>Logout</Text>
+          <Text style={[styles.drawerItemText, styles.logoutText]}>Log out</Text>
       </TouchableOpacity>
+      </View>
 
       <ConfirmationModal
         visible={showConfirmModal}
@@ -251,11 +321,28 @@ const CustomDrawerContent = ({ navigation }: any) => {
         duration={1500}
       />
 
+      <ChangePasswordDrawer
+        visible={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+      />
+
+      <AboutAppDrawer
+        visible={showAboutModal}
+        onClose={() => setShowAboutModal(false)}
+      />
+
+      <NotificationsDrawer
+        visible={showNotificationsModal}
+        onClose={() => setShowNotificationsModal(false)}
+        notifications={notifications}
+        onMarkAsRead={markAsRead}
+      />
+
       {showNotification && (
         <View style={styles.notificationContainer}>
           <View style={styles.notification}>
             <Ionicons name="checkmark-circle" size={24} color="white" />
-            <Text style={styles.notificationText}>{notificationMessage}</Text>
+            <Text style={styles.notificationToast}>{notificationMessage}</Text>
           </View>
         </View>
       )}
@@ -283,29 +370,6 @@ const InstructorNavigator = () => {
     >
       <Drawer.Screen 
         name="Dashboard" 
-        component={InstructorDashboard}
-        options={{
-          swipeEnabled: true,
-        }}
-      />
-      <Drawer.Screen 
-        name="AttendanceManager" 
-        component={ClassManager}
-        options={{
-          drawerIcon: ({ color }) => (
-            <Ionicons name="school" size={24} color={color} />
-          ),
-        }}
-      />
-      <Drawer.Screen 
-        name="AboutApp" 
-        component={InstructorDashboard}
-        options={{
-          swipeEnabled: true,
-        }}
-      />
-      <Drawer.Screen 
-        name="HelpSupport" 
         component={InstructorDashboard}
         options={{
           swipeEnabled: true,
@@ -414,11 +478,6 @@ const styles = StyleSheet.create({
     color: '#2eada6',
     fontWeight: '500',
   },
-  logoutButton: {
-    marginTop: 'auto',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
   logoutText: {
     color: '#ff6b6b',
   },
@@ -446,23 +505,29 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  notificationText: {
+  notificationToast: {
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
   },
-  drawerItemLeft: {
-    flexDirection: 'row',
+  notificationBadge: {
+    backgroundColor: '#ff6b6b',
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
+    justifyContent: 'center',
     alignItems: 'center',
-    flex: 1,
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  notificationToggle: {
     marginLeft: 'auto',
+    paddingHorizontal: 8,
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  menuItems: {
+    flex: 1,
+    paddingTop: 20,
   },
 });
 

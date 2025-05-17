@@ -3,10 +3,10 @@ import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { AdminDrawerParamList } from '../navigation/types';
-import { logAPI } from '../services/api';
-import ConfirmationModal from './ConfirmationModal';
-import SuccessModal from './SuccessModal';
+import { AdminDrawerParamList } from '../../navigation/types';
+import { logAPI } from '../../services/api';
+import ConfirmationModal from '../ConfirmationModal';
+import SuccessModal from '../SuccessModal';
 
 type NavigationProp = DrawerNavigationProp<AdminDrawerParamList>;
 

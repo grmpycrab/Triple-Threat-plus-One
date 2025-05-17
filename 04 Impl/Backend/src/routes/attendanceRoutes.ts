@@ -1,10 +1,11 @@
 import express from 'express';
 import {
-    bulkUpdateAttendance,
-    getAttendanceByClass,
-    getAttendanceByStudent,
-    getStudentAttendanceStatus,
-    submitAttendance
+  bulkUpdateAttendance,
+  getAllAttendance,
+  getAttendanceByClass,
+  getAttendanceByStudent,
+  getStudentAttendanceStatus,
+  submitAttendance
 } from '../controllers/attendanceController';
 import { authenticateToken } from '../middleware/auth';
 
@@ -18,16 +19,14 @@ router.get('/test', (req, res) => {
   });
 });
 
-// Apply authentication middleware to all routes except /test
-router.use((req, res, next) => {
-  if (req.path === '/test') {
-    return next();
-  }
-  authenticateToken(req, res, next);
-});
+// Protected routes
+router.use(authenticateToken);
 
-// Submit attendance (student marks attendance via QR)
+// Submit attendance
 router.post('/', submitAttendance);
+
+// Get all attendance records
+router.get('/all', getAllAttendance);
 
 // Get all attendance records for a class
 router.get('/class/:classId', getAttendanceByClass);
@@ -35,10 +34,10 @@ router.get('/class/:classId', getAttendanceByClass);
 // Get all attendance records for a student
 router.get('/student/:studentId', getAttendanceByStudent);
 
-// Get student's status for a specific class on a specific date
+// Get student's attendance status
 router.get('/status/:classId/:studentId', getStudentAttendanceStatus);
 
-// Bulk update attendance (for instructors)
+// Bulk update attendance
 router.post('/bulk', bulkUpdateAttendance);
 
 export default router; 

@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { attendanceAPI, classAPI, reportAPI, studentAPI } from '../services/api';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { attendanceAPI, classAPI, reportAPI, studentAPI } from '../../services/api';
+import AttendanceDetails from './AttendanceDetails';
 
 interface Class {
   _id: string;
@@ -24,7 +24,7 @@ interface AttendanceRecord {
   studentId: string;
   studentName: string;
   timestamp: string;
-  status: 'present' | 'absent' | 'late';
+  status: 'present' | 'absent';
   classId: string;
   className: string;
   subjectCode: string;
@@ -38,7 +38,7 @@ interface AttendanceDetails {
   students: Array<{
     studentId: string;
     studentName: string;
-    status: 'present' | 'absent' | 'late';
+    status: 'present' | 'absent';
   }>;
   total: number;
   present: number;
@@ -46,6 +46,7 @@ interface AttendanceDetails {
 }
 
 interface Report {
+  _id: string;
   date: string;
   className: string;
   subjectCode: string;
@@ -56,7 +57,7 @@ interface Report {
   students: Array<{
     studentId: string;
     studentName: string;
-    status: 'present' | 'absent' | 'late';
+    status: 'present' | 'absent';
   }>;
 }
 
@@ -78,10 +79,17 @@ const Reports: React.FC = () => {
   const [isOverviewExpanded, setIsOverviewExpanded] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [reportStats, setReportStats] = useState({
+    total: 0,
+    present: 0,
+    absent: 0,
+    percentage: 0
+  });
 
   useEffect(() => {
     fetchData();
-    fetchAttendanceOverview();
+    fetchReportsData();
   }, []);
 
   const fetchData = async () => {
@@ -135,7 +143,7 @@ const Reports: React.FC = () => {
     }
   };
 
-  const fetchAttendanceOverview = async () => {
+  const fetchReportsData = async () => {
     try {
       // Get today's date
       const today = new Date();
@@ -145,67 +153,34 @@ const Reports: React.FC = () => {
         return date.toISOString().split('T')[0];
       });
 
-      // Initialize empty stats
-      const emptyStats = last7Days.map(date => ({
-        date,
-        present: 0,
-        absent: 0,
-        percentage: 0
-      }));
+      // Fetch reports for the last 7 days
+      const reportsData = await reportAPI.getAllReports(
+        last7Days[last7Days.length - 1], // startDate (7 days ago)
+        last7Days[0] // endDate (today)
+      );
 
-      try {
-        // Fetch reports for the last 7 days
-        const reports = await reportAPI.getAllReports(
-          last7Days[last7Days.length - 1], // startDate (7 days ago)
-          last7Days[0] // endDate (today)
-        );
+      setReports(reportsData);
 
-        if (reports && reports.length > 0) {
-          // Process reports data
-          const dailyStats = last7Days.map(date => {
-            const dayReports = reports.filter((report: any) => 
-              new Date(report.date).toISOString().split('T')[0] === date
-            );
+      // Calculate overall statistics
+      const stats = reportsData.reduce((acc: { total: number; present: number; absent: number }, report: Report) => {
+        return {
+          total: acc.total + report.totalStudents,
+          present: acc.present + report.presentCount,
+          absent: acc.absent + report.absentCount
+        };
+      }, { total: 0, present: 0, absent: 0 });
 
-            const dayStats = dayReports.reduce((acc: { present: number; absent: number }, report: any) => ({
-              present: acc.present + report.presentCount,
-              absent: acc.absent + report.absentCount
-            }), { present: 0, absent: 0 });
+      const percentage = stats.total > 0 
+        ? Math.round((stats.present / stats.total) * 100) 
+        : 0;
 
-            const total = dayStats.present + dayStats.absent;
-            const percentage = total > 0 ? Math.round((dayStats.present / total) * 100) : 0;
+      setReportStats({
+        ...stats,
+        percentage
+      });
 
-            return {
-              date,
-              present: dayStats.present,
-              absent: dayStats.absent,
-              percentage
-            };
-          });
-
-          setAttendanceData(dailyStats.reverse());
-        } else {
-          setAttendanceData(emptyStats);
-        }
-
-        // Calculate and store overall percentage from reports data
-        if (reports && reports.length > 0) {
-          const overallPresentCount = reports.reduce((sum: number, report: any) => sum + report.presentCount, 0);
-          const overallAbsentCount = reports.reduce((sum: number, report: any) => sum + report.absentCount, 0);
-          const totalStudents = overallPresentCount + overallAbsentCount;
-          const overallPercentage = totalStudents > 0 ? Math.round((overallPresentCount / totalStudents) * 100) : 0;
-
-          await AsyncStorage.setItem('@attendance_overview_percentage', overallPercentage.toString());
-        } else {
-          await AsyncStorage.setItem('@attendance_overview_percentage', '0');
-        }
-      } catch (error) {
-        console.error('Error fetching reports:', error);
-        setAttendanceData(emptyStats);
-        await AsyncStorage.setItem('@attendance_overview_percentage', '0');
-      }
     } catch (error) {
-      console.error('Error in attendance overview:', error);
+      console.error('Error fetching reports:', error);
     }
   };
 
@@ -248,35 +223,18 @@ const Reports: React.FC = () => {
         return {
           studentId: student.studentId,
           studentName: `${student.surname}, ${student.firstName}${student.middleInitial ? ` ${student.middleInitial}.` : ''}`,
-          status: (attendanceRecord ? attendanceRecord.status : 'absent') as 'present' | 'absent' | 'late'
+          status: (attendanceRecord?.status || 'absent') as 'present' | 'absent'
         };
       });
 
       const presentCount = allStudentsAttendance.filter(s => s.status === 'present').length;
       const absentCount = allStudentsAttendance.filter(s => s.status === 'absent').length;
 
-      // Save the report
-      try {
-        await reportAPI.saveReport({
-          date,
-          className,
-          subjectCode,
-          classId,
-          totalStudents: allStudentsAttendance.length,
-          presentCount,
-          absentCount,
-          students: allStudentsAttendance
-        });
-        console.log('Report saved successfully');
-      } catch (error) {
-        console.error('Error saving report:', error);
-        // Continue even if report saving fails
-      }
-
       setSelectedDetails({
         date,
         className,
         subjectCode,
+        classId,
         students: allStudentsAttendance,
         total: allStudentsAttendance.length,
         present: presentCount,
@@ -285,6 +243,26 @@ const Reports: React.FC = () => {
     } catch (error) {
       console.error('Error fetching attendance details:', error);
       Alert.alert('Error', 'Failed to fetch attendance details');
+    }
+  };
+
+  // Add a new function to handle attendance updates
+  const handleAttendanceUpdate = async () => {
+    try {
+      await fetchData();
+      await fetchReportsData();
+      
+      // If there's a selected details view, refresh it
+      if (selectedDetails && selectedDetails.classId) {
+        await handleCardPress(
+          selectedDetails.date,
+          selectedDetails.classId,
+          selectedDetails.className,
+          selectedDetails.subjectCode
+        );
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
     }
   };
 
@@ -429,38 +407,25 @@ const Reports: React.FC = () => {
       };
     }
 
-    // Fallback to records if no details
-    const stats = {
-      total: 0,
-      present: 0,
-      absent: 0
+    return {
+      total: reportStats.total,
+      present: reportStats.present,
+      absent: reportStats.absent
     };
-
-    attendanceRecords.forEach(record => {
-      stats.total++;
-      if (record.status === 'present') stats.present++;
-      else stats.absent++;
-    });
-
-    return stats;
   };
 
   const calculatePresentPercentage = () => {
-    if (selectedDetails) {
-      return selectedDetails.total > 0 
-        ? Math.round((selectedDetails.present / selectedDetails.total) * 100) 
-        : 0;
-    }
-    return 0;
+    const stats = calculateCurrentStats();
+    return stats.total > 0 
+      ? Math.round((stats.present / stats.total) * 100) 
+      : 0;
   };
 
   const calculateAbsentPercentage = () => {
-    if (selectedDetails) {
-      return selectedDetails.total > 0 
-        ? Math.round((selectedDetails.absent / selectedDetails.total) * 100) 
-        : 0;
-    }
-    return 0;
+    const stats = calculateCurrentStats();
+    return stats.total > 0 
+      ? Math.round((stats.absent / stats.total) * 100) 
+      : 0;
   };
 
   const calculatePercentage = (value: number, total: number) => {
@@ -546,7 +511,7 @@ const Reports: React.FC = () => {
       // Only try to fetch overview data if we successfully saved some reports
       if (successCount > 0) {
         try {
-          await fetchAttendanceOverview();
+          await fetchReportsData();
         } catch (error) {
           console.error('Error fetching overview after save:', error);
           // Don't show error for this since the save was successfulll
@@ -575,99 +540,11 @@ const Reports: React.FC = () => {
 
   if (selectedDetails) {
     return (
-      <View style={styles.container}>
-        <View style={styles.detailsHeader}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => setSelectedDetails(null)}
-          >
-            <Ionicons name="arrow-back" size={24} color="#2eada6" />
-          </TouchableOpacity>
-          <View style={styles.headerInfo}>
-            <Text style={styles.detailsTitle}>Attendance Details</Text>
-            <Text style={styles.detailsDate}>{formatDate(selectedDetails.date)}</Text>
-            <Text style={styles.detailsClass}>{selectedDetails.className} - {selectedDetails.subjectCode}</Text>
-          </View>
-          <TouchableOpacity 
-            style={styles.exportButton}
-            onPress={() => setShowExportModal(true)}
-          >
-            <Ionicons name="download-outline" size={24} color="#2eada6" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statValue}>{selectedDetails.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: '#4CAF50' }]}>
-              {selectedDetails.present}
-            </Text>
-            <Text style={styles.statLabel}>Present</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: '#F44336' }]}>
-              {selectedDetails.absent}
-            </Text>
-            <Text style={styles.statLabel}>Absent</Text>
-          </View>
-        </View>
-
-        <FlatList
-          data={selectedDetails.students}
-          keyExtractor={(item) => item.studentId}
-          renderItem={({ item }) => (
-            <View style={styles.studentItem}>
-              <View style={styles.studentInfo}>
-                <Text style={styles.studentName}>{item.studentName}</Text>
-                <Text style={styles.studentId}>{item.studentId}</Text>
-              </View>
-              <View style={[
-                styles.statusBadge,
-                { backgroundColor: item.status === 'present' ? '#4CAF50' : '#F44336' }
-              ]}>
-                <Text style={styles.statusText}>
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                </Text>
-              </View>
-            </View>
-          )}
-          contentContainerStyle={styles.studentList}
-        />
-
-        {/* Export Modal */}
-        <Modal
-          transparent={true}
-          visible={showExportModal}
-          onRequestClose={() => setShowExportModal(false)}
-          animationType="fade"
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Export Attendance</Text>
-              <Text style={styles.modalText}>
-                Do you want to export this attendance record as a CSV file?
-              </Text>
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
-                  onPress={() => setShowExportModal(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.confirmButton]}
-                  onPress={handleExport}
-                >
-                  <Text style={styles.modalButtonText}>Export</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      </View>
+      <AttendanceDetails
+        details={selectedDetails}
+        onClose={() => setSelectedDetails(null)}
+        onStatusChange={handleAttendanceUpdate}
+      />
     );
   }
 
@@ -685,7 +562,9 @@ const Reports: React.FC = () => {
         >
           <View>
             <Text style={styles.cardTitle}>Attendance Overview</Text>
-            <Text style={styles.subTitle}>Current attendance statistics</Text>
+            <Text style={styles.subTitle}>
+              {`Last 7 Days • ${reports.length} Reports`}
+            </Text>
           </View>
           <Ionicons 
             name={isOverviewExpanded ? "chevron-up" : "chevron-down"} 
@@ -695,29 +574,43 @@ const Reports: React.FC = () => {
         </TouchableOpacity>
 
         <View style={styles.overviewStats}>
-          <View style={styles.statCircle}>
-            <Text style={styles.statPercentage}>{presentPercentage}%</Text>
+          <View style={[styles.statCircle, { borderColor: '#4CAF50', borderWidth: 2 }]}>
+            <Text style={[styles.statPercentage, { color: '#4CAF50' }]}>{calculatePresentPercentage()}%</Text>
             <Text style={[styles.statLabel, { color: '#4CAF50' }]}>Present</Text>
+            <Text style={styles.statSubLabel}>
+              {calculateCurrentStats().present} students
+            </Text>
           </View>
-          <View style={styles.statCircle}>
-            <Text style={styles.statPercentage}>{absentPercentage}%</Text>
+          <View style={[styles.statCircle, { borderColor: '#F44336', borderWidth: 2 }]}>
+            <Text style={[styles.statPercentage, { color: '#F44336' }]}>{calculateAbsentPercentage()}%</Text>
             <Text style={[styles.statLabel, { color: '#F44336' }]}>Absent</Text>
+            <Text style={styles.statSubLabel}>
+              {calculateCurrentStats().absent} students
+            </Text>
           </View>
         </View>
 
         {isOverviewExpanded && (
           <View style={styles.detailedStats}>
             <View style={styles.statRow}>
+              <Text style={styles.statTitle}>Total Reports</Text>
+              <Text style={styles.statValue}>{reports.length}</Text>
+            </View>
+            <View style={styles.statRow}>
               <Text style={styles.statTitle}>Total Students</Text>
-              <Text style={styles.statValue}>{currentStats.total}</Text>
+              <Text style={styles.statValue}>{calculateCurrentStats().total}</Text>
             </View>
             <View style={styles.statRow}>
-              <Text style={styles.statTitle}>Present</Text>
-              <Text style={[styles.statValue, { color: '#4CAF50' }]}>{currentStats.present}</Text>
+              <Text style={styles.statTitle}>Present Students</Text>
+              <Text style={[styles.statValue, { color: '#4CAF50' }]}>
+                {calculateCurrentStats().present}
+              </Text>
             </View>
             <View style={styles.statRow}>
-              <Text style={styles.statTitle}>Absent</Text>
-              <Text style={[styles.statValue, { color: '#F44336' }]}>{currentStats.absent}</Text>
+              <Text style={styles.statTitle}>Absent Students</Text>
+              <Text style={[styles.statValue, { color: '#F44336' }]}>
+                {calculateCurrentStats().absent}
+              </Text>
             </View>
           </View>
         )}
@@ -1302,16 +1195,17 @@ const styles = StyleSheet.create({
   overviewStats: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 20,
-    paddingHorizontal: 30,
+    paddingVertical: 25,
+    paddingHorizontal: 20,
+    gap: 30,
   },
   statCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'white',
     elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1322,6 +1216,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#2eada6',
+    marginBottom: 2,
   },
   detailedStats: {
     marginTop: 20,
@@ -1348,6 +1243,11 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 8,
     backgroundColor: 'rgba(46, 173, 166, 0.1)',
+  },
+  statSubLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
 });
 

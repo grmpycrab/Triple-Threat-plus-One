@@ -28,9 +28,6 @@ export type AdminDrawerParamList = {
 
 export type InstructorDrawerParamList = {
   Dashboard: undefined;
-  AttendanceManager: undefined;
-  AboutApp: undefined;
-  HelpSupport: undefined;
 };
 
 export type StudentDrawerParamList = {
@@ -63,6 +60,12 @@ export type InstructorBottomTabParamList = {
 
 export type StudentBottomTabParamList = {
   StudentDashboard: undefined;
-  Attendance: undefined;
-  Profile: undefined;
+  MyClasses: undefined;
+  Records: undefined;
+};
+
+export type AdminBottomTabParamList = {
+  Dashboard: undefined;
+  ManageUsers: undefined;
+  Records: undefined;
 }; 

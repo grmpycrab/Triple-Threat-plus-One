@@ -1,20 +1,31 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import ViewClass from '../components/attendance/ViewClass';
+import ViewClass from '../components/instructor/ClassList';
 import { useAuth } from '../context/AuthContext';
 import AdminNavigator from '../navigation/AdminNavigator';
 import InstructorNavigator from '../navigation/InstructorNavigator';
 import StudentNavigator from '../navigation/StudentNavigator';
 import { RootStackParamList } from '../navigation/types';
 import Login from './Login';
+import SplashScreen from './SplashScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const App: React.FC = () => {
   const { user, loading } = useAuth();
+  const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    // Show splash screen for 3 seconds
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   if (loading) {
     return (
@@ -22,6 +33,10 @@ const App: React.FC = () => {
         <ActivityIndicator size="large" color="#2eada6" />
       </View>
     );
+  }
+
+  if (showSplash) {
+    return <SplashScreen />;
   }
 
   return (

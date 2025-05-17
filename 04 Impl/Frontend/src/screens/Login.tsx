@@ -3,7 +3,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import DevLoginTool from '../components/DevLoginTool';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/types';
@@ -94,8 +93,6 @@ const Login: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <DevLoginTool />
-      
       <View style={styles.formContainer}>
         <View style={styles.iconContainer}>
           <Animated.View style={[{ transform: [{ rotate: spin }] }]}>

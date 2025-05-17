@@ -5,8 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { AdminDrawerParamList, UserRole } from '../navigation/types';
-import { authAPI, userAPI } from '../services/api';
+import { AdminDrawerParamList, UserRole } from '../../navigation/types';
+import { authAPI, userAPI } from '../../services/api';
 
 type NavigationProp = DrawerNavigationProp<AdminDrawerParamList>;
 
@@ -355,31 +355,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'white',
-  },
-  headerContainer: {
-    backgroundColor: '#2eada6',
-    padding: 20,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'right',
-    flex: 1,
   },
   contentContainer: {
     flex: 1,
@@ -778,18 +753,6 @@ const styles = StyleSheet.create({
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerContainer}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.navigate('Dashboard')}
-          >
-            <Ionicons name="arrow-back" size={24} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Manage Users</Text>
-        </View>
-      </View>
-
       <View style={[styles.contentContainer, { marginTop: 0 }]}>
         <View style={styles.header}>
           <Text style={styles.title}>User List</Text>

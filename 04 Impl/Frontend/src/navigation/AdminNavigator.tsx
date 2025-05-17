@@ -3,9 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import ViewLogs from '../components/ActivityLogs';
+import AboutAppDrawer from '../components/AboutAppDrawer';
+import ViewLogs from '../components/admin/ActivityLogs';
+import ManageUser from '../components/admin/UserManager';
+import ChangePasswordDrawer from '../components/ChangePasswordDrawer';
 import ConfirmationModal from '../components/ConfirmationModal';
-import ManageUser from '../components/ManageUser';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
 import AdminDashboard from '../screens/AdminScreen';
@@ -23,6 +25,8 @@ const CustomDrawerContent = ({ navigation }: any) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
 
   // Load saved profile image on component mount
   useEffect(() => {
@@ -175,22 +179,7 @@ const CustomDrawerContent = ({ navigation }: any) => {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        style={styles.drawerItem}
-        onPress={() => navigation.navigate('Dashboard')}
-      >
-        <Ionicons name="home-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Dashboard</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.drawerItem}
-        onPress={() => navigation.navigate('ManageUsers')}
-      >
-        <Ionicons name="people-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Manage Users</Text>
-      </TouchableOpacity>
-
+      <View style={styles.menuItems}>
       <TouchableOpacity
         style={styles.drawerItem}
         onPress={() => navigation.navigate('ViewLogs')}
@@ -199,13 +188,33 @@ const CustomDrawerContent = ({ navigation }: any) => {
         <Text style={styles.drawerItemText}>Activity Logs</Text>
       </TouchableOpacity>
       
+        {/* Change Password */}
+        <TouchableOpacity
+          style={styles.drawerItem}
+          onPress={() => setShowChangePasswordModal(true)}
+        >
+          <Ionicons name="lock-closed-outline" size={24} color="#2eada6" />
+          <Text style={styles.drawerItemText}>Change Password</Text>
+        </TouchableOpacity>
+
+        {/* About App */}
+        <TouchableOpacity
+          style={styles.drawerItem}
+          onPress={() => setShowAboutModal(true)}
+        >
+          <Ionicons name="information-circle-outline" size={24} color="#2eada6" />
+          <Text style={styles.drawerItemText}>About App</Text>
+        </TouchableOpacity>
+
+        {/* Logout Button */}
       <TouchableOpacity
-        style={[styles.drawerItem, styles.logoutButton]}
+          style={[styles.drawerItem, { borderTopWidth: 1, borderTopColor: '#f0f0f0' }]}
         onPress={handleLogoutPress}
       >
         <Ionicons name="log-out-outline" size={24} color="#ff6b6b" />
-        <Text style={[styles.drawerItemText, styles.logoutText]}>Logout</Text>
+          <Text style={[styles.drawerItemText, styles.logoutText]}>Log out</Text>
       </TouchableOpacity>
+      </View>
 
       <ConfirmationModal
         visible={showConfirmModal}
@@ -219,6 +228,16 @@ const CustomDrawerContent = ({ navigation }: any) => {
         visible={showSuccessModal}
         message="Logged out successfully!"
         duration={1500}
+      />
+
+      <ChangePasswordDrawer
+        visible={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+      />
+
+      <AboutAppDrawer
+        visible={showAboutModal}
+        onClose={() => setShowAboutModal(false)}
       />
 
       {showNotification && (
@@ -357,6 +376,10 @@ const styles = StyleSheet.create({
     right: 16,
     top: 24,
   },
+  menuItems: {
+    flex: 1,
+    paddingTop: 20,
+  },
   drawerItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -369,11 +392,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#2eada6',
     fontWeight: '500',
-  },
-  logoutButton: {
-    marginTop: 'auto',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
   },
   logoutText: {
     color: '#ff6b6b',

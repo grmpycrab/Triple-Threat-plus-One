@@ -3,57 +3,17 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { UserRole } from '../navigation/types';
 
-// Allow both HTTP and HTTPS options with fallbacks
-// Try different connection options
-const API_URLS = [
-  'http://localhost:5000/api',    // Standard localhost
-  'http://127.0.0.1:5000/api',    // IP address version
-  'https://localhost:5000/api',   // HTTPS version (if enabled)
-];
+// Define base URL
+const BASE_URL = 'http://localhost:5000/api';
 
 // Create axios instance
 const api = axios.create({
-  baseURL: API_URLS[0], // Start with the first option
+  baseURL: BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
   timeout: 10000, // 10 second timeout
 });
-
-// Add a function to try different URLs if the primary fails
-const tryAlternativeUrls = async (config: any, originalError: any) => {
-  // Don't retry if it was an auth error
-  if (originalError.response && (originalError.response.status === 401 || originalError.response.status === 403)) {
-    return Promise.reject(originalError);
-  }
-  
-  // Try alternative URLs if it's a connection error
-  for (let i = 1; i < API_URLS.length; i++) {
-    try {
-      console.log(`Trying alternative API URL: ${API_URLS[i]}`);
-      const newConfig = { ...config, baseURL: API_URLS[i] };
-      return await axios(newConfig);
-    } catch (error) {
-      console.log(`Alternative URL ${API_URLS[i]} failed too`);
-    }
-  }
-  
-  // If all alternatives fail, reject with the original error
-  return Promise.reject(originalError);
-};
-
-// Add error handling and retry mechanism
-api.interceptors.response.use(
-  response => response,
-  async error => {
-    // Network error or timeout
-    if (!error.response || error.code === 'ECONNABORTED') {
-      console.log('Connection error, trying alternative URLs');
-      return tryAlternativeUrls(error.config, error);
-    }
-    return Promise.reject(error);
-  }
-);
 
 // Add token to requests if it exists
 api.interceptors.request.use(async (config) => {
@@ -68,6 +28,18 @@ api.interceptors.request.use(async (config) => {
     return config;
   }
 });
+
+// Add error handling
+api.interceptors.response.use(
+  response => response,
+  async error => {
+    if (!error.response || error.code === 'ECONNABORTED') {
+      console.error('Network error or timeout:', error);
+      throw new Error('Unable to connect to the server. Please check your connection.');
+    }
+    throw error;
+  }
+);
 
 // Auth API
 export const authAPI = {
@@ -268,7 +240,7 @@ export const attendanceAPI = {
       try {
         const rootResponse = await axios.get('http://localhost:5000/');
         console.log('Root connection successful:', rootResponse.data);
-        api.defaults.baseURL = 'http://localhost:5000/api';
+        api.defaults.baseURL = BASE_URL;
         return true;
       } catch (rootError) {
         console.error('Root connection failed');
@@ -284,43 +256,13 @@ export const attendanceAPI = {
         console.error('Alternative root connection failed');
       }
       
-      // Step 3: Try the general API test endpoint
-      try {
-        console.log('Testing connection to general API endpoint...');
-        const apiResponse = await axios.get('http://localhost:5000/api/test');
-        console.log('API test connection successful:', apiResponse.data);
-        api.defaults.baseURL = 'http://localhost:5000/api';
-        return true;
-      } catch (apiError) {
-        console.error('API test connection failed');
-      }
-      
-      // Step 4: As a last resort, try the attendance test
+      // Step 3: Try the attendance test endpoint
       console.log('Testing connection to attendance API...');
-      const response = await axios.get(`${API_URLS[0]}/attendance/test`);
+      const response = await axios.get(`${BASE_URL}/attendance/test`);
       console.log('Connection test successful:', response.data);
       return true;
-    } catch (error: any) {
-      console.error('Connection test failed for primary URL');
-      
-      // Try alternative URLs
-      for (let i = 1; i < API_URLS.length; i++) {
-        try {
-          console.log(`Testing connection to alternative URL: ${API_URLS[i]}/test`);
-          const response = await axios.get(`${API_URLS[i]}/test`);
-          console.log(`Connection successful with ${API_URLS[i]}:`, response.data);
-          
-          // Update the default baseURL to the working one
-          api.defaults.baseURL = API_URLS[i];
-          console.log('Updated API baseURL to:', API_URLS[i]);
-          
-          return true;
-        } catch (altError) {
-          console.error(`Alternative URL ${API_URLS[i]} also failed`);
-        }
-      }
-      
-      console.error('All connection attempts failed');
+    } catch (error) {
+      console.error('All connection attempts failed:', error);
       return false;
     }
   },
@@ -481,7 +423,7 @@ export const attendanceAPI = {
 
   getAllAttendance: async () => {
     try {
-      const response = await axios.get(`${API_URLS[0]}/attendance/all`);
+      const response = await api.get('/attendance/all');
       return response.data;
     } catch (error) {
       console.error('Error fetching all attendance:', error);

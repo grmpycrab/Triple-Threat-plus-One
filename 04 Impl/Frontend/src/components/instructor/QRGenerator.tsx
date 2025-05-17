@@ -36,7 +36,9 @@ const QRGenerator: React.FC<QRGeneratorProps> = ({
         yearSection,
         className: `${subjectCode} ${yearSection || ''}`.trim(),
         timestamp: now.toISOString(),
-        type: 'attendance'
+        type: 'attendance',
+        secureKey: 'TTPO_2024_ATTENDANCE',
+        version: '1.0'
       };
       
       const qrString = JSON.stringify(data);
@@ -105,7 +107,7 @@ ${qrData}`,
                 <QRCode
                   value={qrData}
                   size={250}
-                  color="#2eada6"
+                  color="#000000"
                   backgroundColor="white"
                   getRef={(c) => { qrRef.current = c; }}
                 />

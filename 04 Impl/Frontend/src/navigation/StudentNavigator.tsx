@@ -1,56 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AboutAppDrawer from '../components/AboutAppDrawer';
+import ChangePasswordDrawer from '../components/ChangePasswordDrawer';
 import ConfirmationModal from '../components/ConfirmationModal';
+import NotificationsDrawer from '../components/NotificationsDrawer';
 import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../context/AuthContext';
-import QRScanScreen from '../screens/QRScanScreen';
-import RecordsScreen from '../screens/RecordsScreen';
 import StudentDashboard from '../screens/StudentScreen';
 import { StudentDrawerParamList } from './types';
 
 const Drawer = createDrawerNavigator<StudentDrawerParamList>();
-const Tab = createBottomTabNavigator();
-
-const { width } = Dimensions.get('window');
-const TAB_WIDTH = width / 3; // Updated for 3 tabs
-const INDICATOR_WIDTH = 24;
-const INDICATOR_OFFSET = (TAB_WIDTH - INDICATOR_WIDTH) / 2;
-
-interface TabIconProps {
-  name: keyof typeof Ionicons.glyphMap;
-  focused: boolean;
-  size?: number;
-}
-
-const TabIcon = ({ name, focused, size = 24 }: TabIconProps) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.spring(scaleAnim, {
-      toValue: focused ? 1.2 : 1,
-      useNativeDriver: true,
-      friction: 10,
-    }).start();
-  }, [focused]);
-
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-        <Ionicons
-          name={focused ? name : `${name}-outline` as keyof typeof Ionicons.glyphMap}
-          size={size}
-          color={focused ? 'white' : 'rgba(255, 255, 255, 0.6)'}
-        />
-      </Animated.View>
-    </View>
-  );
-};
 
 const PROFILE_IMAGE_KEY = '@student_profile_image';
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  type: 'upcoming' | 'ongoing' | 'ended';
+  read: boolean;
+}
 
 const CustomDrawerContent = ({ navigation }: any) => {
   const { logout, user } = useAuth();
@@ -60,12 +33,90 @@ const CustomDrawerContent = ({ navigation }: any) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState('');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
 
   useEffect(() => {
     loadProfileImage();
-    loadNotificationSettings();
+    generateNotifications();
+    // Set up interval to update notifications every minute
+    const interval = setInterval(generateNotifications, 60000);
+    return () => clearInterval(interval);
   }, []);
+
+  const generateNotifications = () => {
+    const currentTime = new Date();
+    const todayClasses = window.todayClasses || [];
+
+    const newNotifications: Notification[] = todayClasses.flatMap(classItem => {
+      return classItem.schedules.map((schedule) => {
+        const [startHour, startMinute] = schedule.startTime.split(':').map(Number);
+        const [endHour, endMinute] = schedule.endTime.split(':').map(Number);
+        const adjustedStartHour = schedule.startPeriod === 'PM' && startHour !== 12 ? startHour + 12 : startHour;
+        const adjustedEndHour = schedule.endPeriod === 'PM' && endHour !== 12 ? endHour + 12 : endHour;
+
+        const startTimeDate = new Date(
+          currentTime.getFullYear(),
+          currentTime.getMonth(),
+          currentTime.getDate(),
+          adjustedStartHour,
+          startMinute
+        );
+
+        const endTimeDate = new Date(
+          currentTime.getFullYear(),
+          currentTime.getMonth(),
+          currentTime.getDate(),
+          adjustedEndHour,
+          endMinute
+        );
+
+        const timeDiffStart = startTimeDate.getTime() - currentTime.getTime();
+        const minutesUntilStart = Math.floor(timeDiffStart / (1000 * 60));
+
+        let type: 'upcoming' | 'ongoing' | 'ended';
+        let message: string;
+
+        if (currentTime < startTimeDate && minutesUntilStart <= 30) {
+          type = 'upcoming';
+          message = `Starting in ${minutesUntilStart} minute${minutesUntilStart !== 1 ? 's' : ''}`;
+        } else if (currentTime >= startTimeDate && currentTime <= endTimeDate) {
+          type = 'ongoing';
+          message = 'Class is currently in session';
+        } else if (currentTime > endTimeDate && (currentTime.getTime() - endTimeDate.getTime()) <= 30 * 60 * 1000) {
+          type = 'ended';
+          message = 'Class has ended recently';
+        } else {
+          return null;
+        }
+
+        return {
+          id: `${classItem._id}-${schedule.startTime}-${schedule.endTime}`,
+          title: `${classItem.subjectCode} - ${classItem.className}`,
+          message,
+          time: `${schedule.startTime} ${schedule.startPeriod} - ${schedule.endTime} ${schedule.endPeriod}`,
+          type,
+          read: false
+        };
+      });
+    }).filter((notification): notification is Notification => notification !== null);
+
+    setNotifications(newNotifications);
+  };
+
+  const getUnreadCount = () => {
+    return notifications.filter(n => !n.read).length;
+  };
+
+  const markAsRead = (notificationId: string) => {
+    setNotifications(prev =>
+      prev.map(n =>
+        n.id === notificationId ? { ...n, read: true } : n
+      )
+    );
+  };
 
   const loadProfileImage = async () => {
     try {
@@ -75,15 +126,6 @@ const CustomDrawerContent = ({ navigation }: any) => {
       }
     } catch (error) {
       console.error('Error loading profile image:', error);
-    }
-  };
-
-  const loadNotificationSettings = async () => {
-    try {
-      const savedSetting = await AsyncStorage.getItem('@notifications_enabled');
-      setNotificationsEnabled(savedSetting !== 'false');
-    } catch (error) {
-      console.error('Error loading notification settings:', error);
     }
   };
 
@@ -140,16 +182,6 @@ const CustomDrawerContent = ({ navigation }: any) => {
       showSuccessNotification('Profile picture removed successfully');
     } catch (error) {
       console.error('Error removing profile image:', error);
-    }
-  };
-
-  const toggleNotifications = async (value: boolean) => {
-    setNotificationsEnabled(value);
-    try {
-      await AsyncStorage.setItem('@notifications_enabled', value.toString());
-      showSuccessNotification(value ? 'Notifications enabled' : 'Notifications disabled');
-    } catch (error) {
-      console.error('Error saving notification settings:', error);
     }
   };
 
@@ -210,7 +242,7 @@ const CustomDrawerContent = ({ navigation }: any) => {
           <View style={styles.profileInfo}>
             <Text style={styles.username}>{user?.username || 'Student'}</Text>
             <Text style={styles.role}>{user?.role?.toUpperCase() || 'STUDENT'}</Text>
-            <Text style={styles.email}>{user?.userId || 'No ID'}</Text>
+            <Text style={styles.studentId}>ID: {user?.userId || 'S-0000'}</Text>
           </View>
           <input
             type="file"
@@ -228,76 +260,48 @@ const CustomDrawerContent = ({ navigation }: any) => {
         </TouchableOpacity>
       </View>
 
-      {/* Settings Section */}
+      <View style={styles.menuItems}>
+        {/* Notifications */}
       <TouchableOpacity
         style={styles.drawerItem}
-        onPress={() => navigation.navigate('EditProfile')}
+          onPress={() => setShowNotificationsModal(true)}
       >
-        <Ionicons name="person-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Edit Profile</Text>
-        <View style={styles.warningBadge}>
-          <Text style={styles.warningText}>!</Text>
-        </View>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.drawerItem}
-        onPress={() => navigation.navigate('AttendanceSettings')}
-      >
-        <Ionicons name="calendar-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Attendance Settings</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.drawerItem, styles.notificationItem]}
-        onPress={() => {}}
-        activeOpacity={1}
-      >
-        <View style={styles.drawerItemLeft}>
           <Ionicons name="notifications-outline" size={24} color="#2eada6" />
-          <Text style={styles.drawerItemText}>Notifications & Alerts</Text>
+          <Text style={styles.drawerItemText}>Notifications</Text>
+          {getUnreadCount() > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.badgeText}>{getUnreadCount()}</Text>
         </View>
-        <Switch
-          value={notificationsEnabled}
-          onValueChange={toggleNotifications}
-          trackColor={{ false: '#d4d4d4', true: '#93d5d1' }}
-          thumbColor={notificationsEnabled ? '#2eada6' : '#f4f3f4'}
-          ios_backgroundColor="#d4d4d4"
-          style={styles.notificationToggle}
-        />
+          )}
       </TouchableOpacity>
 
+        {/* Change Password */}
       <TouchableOpacity
         style={styles.drawerItem}
-        onPress={() => navigation.navigate('PrivacySecurity')}
+          onPress={() => setShowChangePasswordModal(true)}
       >
-        <Ionicons name="shield-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Privacy & Security</Text>
+          <Ionicons name="lock-closed-outline" size={24} color="#2eada6" />
+          <Text style={styles.drawerItemText}>Change Password</Text>
       </TouchableOpacity>
 
+        {/* About App */}
       <TouchableOpacity
         style={styles.drawerItem}
-        onPress={() => navigation.navigate('HelpSupport')}
-      >
-        <Ionicons name="help-circle-outline" size={24} color="#2eada6" />
-        <Text style={styles.drawerItemText}>Help & Support</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.drawerItem}
-        onPress={() => navigation.navigate('AboutApp')}
+          onPress={() => setShowAboutModal(true)}
       >
         <Ionicons name="information-circle-outline" size={24} color="#2eada6" />
         <Text style={styles.drawerItemText}>About App</Text>
       </TouchableOpacity>
 
+        {/* Logout Button */}
       <TouchableOpacity
-        style={[styles.drawerItem, styles.logoutButton]}
+          style={[styles.drawerItem, { borderTopWidth: 1, borderTopColor: '#f0f0f0', marginTop: 0 }]}
         onPress={handleLogoutPress}
       >
         <Ionicons name="log-out-outline" size={24} color="#ff6b6b" />
         <Text style={[styles.drawerItemText, styles.logoutText]}>Log out</Text>
       </TouchableOpacity>
+      </View>
 
       <ConfirmationModal
         visible={showConfirmModal}
@@ -313,112 +317,31 @@ const CustomDrawerContent = ({ navigation }: any) => {
         duration={1500}
       />
 
+      <ChangePasswordDrawer
+        visible={showChangePasswordModal}
+        onClose={() => setShowChangePasswordModal(false)}
+      />
+
+      <AboutAppDrawer
+        visible={showAboutModal}
+        onClose={() => setShowAboutModal(false)}
+      />
+
+      <NotificationsDrawer
+        visible={showNotificationsModal}
+        onClose={() => setShowNotificationsModal(false)}
+        notifications={notifications}
+        onMarkAsRead={markAsRead}
+      />
+
       {showNotification && (
         <View style={styles.notificationContainer}>
           <View style={styles.notification}>
             <Ionicons name="checkmark-circle" size={24} color="white" />
-            <Text style={styles.notificationText}>{notificationMessage}</Text>
+            <Text style={styles.notificationToast}>{notificationMessage}</Text>
           </View>
         </View>
       )}
-    </View>
-  );
-};
-
-const TabNavigator = () => {
-  const slideAnim = useRef(new Animated.Value(0)).current;
-  const [activeTab, setActiveTab] = useState('Home');
-
-  const handleTabPress = (index: number, tabName: string) => {
-    Animated.spring(slideAnim, {
-      toValue: (index * TAB_WIDTH) + INDICATOR_OFFSET,
-      useNativeDriver: true,
-      friction: 8,
-      tension: 50,
-    }).start();
-    setActiveTab(tabName);
-  };
-
-  useEffect(() => {
-    // Initialize line position to first tab
-    slideAnim.setValue(INDICATOR_OFFSET);
-  }, []);
-
-  return (
-    <View style={{ flex: 1 }}>
-      <Tab.Navigator
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: '#2eada6',
-            borderTopWidth: 1,
-            borderTopColor: 'rgba(255, 255, 255, 0.2)',
-            height: 70,
-            paddingTop: 8,
-            paddingBottom: 12,
-          },
-          tabBarShowLabel: false,
-          tabBarItemStyle: {
-            paddingBottom: 4,
-          },
-        }}
-        screenListeners={({ navigation }) => ({
-          tabPress: (e) => {
-            const index = navigation.getState().index;
-            const route = navigation.getState().routes[index];
-            handleTabPress(index, route.name);
-          },
-        })}
-      >
-        <Tab.Screen 
-          name="Home" 
-          component={StudentDashboard}
-          options={{
-            tabBarIcon: ({ focused }) => (
-              <TabIcon name="home" focused={focused} />
-            ),
-          }}
-          listeners={{
-            tabPress: () => handleTabPress(0, 'Home'),
-          }}
-        />
-        <Tab.Screen 
-          name="QR Scan" 
-          component={QRScanScreen}
-          options={{
-            tabBarIcon: ({ focused }) => (
-              <TabIcon name="qr-code" focused={focused} />
-            ),
-          }}
-          listeners={{
-            tabPress: () => handleTabPress(1, 'QR Scan'),
-          }}
-        />
-        <Tab.Screen 
-          name="Records" 
-          component={RecordsScreen}
-          options={{
-            tabBarIcon: ({ focused }) => (
-              <TabIcon name="document-text" focused={focused} />
-            ),
-          }}
-          listeners={{
-            tabPress: () => handleTabPress(2, 'Records'),
-          }}
-        />
-      </Tab.Navigator>
-      <Animated.View
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          left: 0,
-          width: INDICATOR_WIDTH,
-          height: 3,
-          backgroundColor: 'white',
-          borderRadius: 1.5,
-          transform: [{ translateX: slideAnim }],
-        }}
-      />
     </View>
   );
 };
@@ -443,41 +366,6 @@ const StudentNavigator = () => {
     >
       <Drawer.Screen 
         name="Dashboard" 
-        component={TabNavigator}
-        options={{
-          swipeEnabled: true,
-        }}
-      />
-      <Drawer.Screen 
-        name="EditProfile" 
-        component={StudentDashboard}
-        options={{
-          swipeEnabled: true,
-        }}
-      />
-      <Drawer.Screen 
-        name="AttendanceSettings" 
-        component={StudentDashboard}
-        options={{
-          swipeEnabled: true,
-        }}
-      />
-      <Drawer.Screen 
-        name="PrivacySecurity" 
-        component={StudentDashboard}
-        options={{
-          swipeEnabled: true,
-        }}
-      />
-      <Drawer.Screen 
-        name="HelpSupport" 
-        component={StudentDashboard}
-        options={{
-          swipeEnabled: true,
-        }}
-      />
-      <Drawer.Screen 
-        name="AboutApp" 
         component={StudentDashboard}
         options={{
           swipeEnabled: true,
@@ -558,10 +446,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     textAlign: 'center',
   },
-  email: {
+  studentId: {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 14,
     textAlign: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 15,
+    marginTop: 4,
   },
   closeButton: {
     position: 'absolute',
@@ -580,11 +473,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#2eada6',
     fontWeight: '500',
-  },
-  logoutButton: {
-    marginTop: 'auto',
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
   },
   logoutText: {
     color: '#ff6b6b',
@@ -613,37 +501,29 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
-  notificationText: {
+  notificationToast: {
     color: 'white',
     fontSize: 16,
     fontWeight: '500',
   },
-  drawerItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  notificationItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  notificationToggle: {
-    marginLeft: 'auto',
-  },
-  warningBadge: {
+  notificationBadge: {
     backgroundColor: '#ff6b6b',
-    width: 16,
-    height: 16,
-    borderRadius: 8,
+    borderRadius: 12,
+    minWidth: 24,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: 'auto',
+    paddingHorizontal: 8,
   },
-  warningText: {
+  badgeText: {
     color: 'white',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  menuItems: {
+    flex: 1,
+    paddingTop: 20,
   },
 });
 

@@ -3,23 +3,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
 import { BarCodeScanner } from 'expo-barcode-scanner';
+import { BlurView } from 'expo-blur';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Linking,
-    Modal,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Linking,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { StudentDrawerParamList } from '../navigation/types';
-import { attendanceAPI, authAPI } from '../services/api';
+import Animated, { SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import { StudentDrawerParamList } from '../../navigation/types';
+import { attendanceAPI, authAPI } from '../../services/api';
 
 // Import webcam for web platform
 import jsQR from 'jsqr';
@@ -37,18 +37,23 @@ interface AttendanceRecord {
   studentName: string;
 }
 
-const QRScanScreen: React.FC = () => {
+interface QRScanScreenProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+const QRScanScreen: React.FC<QRScanScreenProps> = ({ visible, onClose }) => {
   const navigation = useNavigation<NavigationProp>();
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState<string | null>(null);
   const [confirmationSubject, setConfirmationSubject] = useState<string | null>(null);
   const [confirmationClass, setConfirmationClass] = useState<string | null>(null);
-  const [showManualEntry, setShowManualEntry] = useState(false);
-  const [manualCode, setManualCode] = useState('');
   const [studentId, setStudentId] = useState<string | null>(null);
   const [permissionLoading, setPermissionLoading] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   
   // Web camera refs and state
   const webcamRef = useRef<Webcam>(null);
@@ -172,32 +177,12 @@ const QRScanScreen: React.FC = () => {
     setShowScanner(true);
     setScanning(true);
     
-    // Show scanning feedback to user
-    const scanFeedback = document.createElement('div');
-    scanFeedback.id = 'qr-scan-feedback';
-    scanFeedback.style.position = 'fixed';
-    scanFeedback.style.bottom = '80px';
-    scanFeedback.style.left = '50%';
-    scanFeedback.style.transform = 'translateX(-50%)';
-    scanFeedback.style.backgroundColor = 'rgba(0,0,0,0.7)';
-    scanFeedback.style.color = 'white';
-    scanFeedback.style.padding = '8px 16px';
-    scanFeedback.style.borderRadius = '20px';
-    scanFeedback.style.zIndex = '9999';
-    scanFeedback.style.fontFamily = 'Arial, sans-serif';
-    scanFeedback.textContent = 'Scanning for QR code...';
-    document.body.appendChild(scanFeedback);
-    
     // Start scanning for QR codes with increased frequency
     scannerInterval.current = setInterval(() => {
       if (webcamRef.current) {
         try {
           const imageSrc = webcamRef.current.getScreenshot();
           if (imageSrc) {
-            // Update feedback occasionally to show the scanner is working
-            scanFeedback.textContent = 'Scanning for QR code... ' + 
-              new Date().toLocaleTimeString().split(' ')[0];
-            
             // Use window.Image for web platform
             const image = new window.Image();
             image.src = imageSrc;
@@ -216,27 +201,16 @@ const QRScanScreen: React.FC = () => {
                   const code = jsQR(imageData.data, imageData.width, imageData.height);
                   
                   if (code) {
-                    // Show success feedback
-                    scanFeedback.textContent = 'QR Code found! Saving attendance...';
-                    scanFeedback.style.backgroundColor = '#4CAF50';
-                    
                     // QR code found - handle it
                     console.log('QR Code detected:', code.data);
-                    
-                    // Clean up feedback element after a delay
-                    setTimeout(() => {
-                      if (document.body.contains(scanFeedback)) {
-                        document.body.removeChild(scanFeedback);
-                      }
-                    }, 2000);
-                    
                     handleQRCodeData(code.data);
                   }
                 }
               } catch (err) {
                 console.error('Error processing QR:', err);
-                scanFeedback.textContent = 'Error scanning QR code. Please try again.';
-                scanFeedback.style.backgroundColor = '#F44336';
+                setErrorMessage('Error scanning QR code. Please try again.');
+                setShowError(true);
+                setTimeout(() => setShowError(false), 3000);
               }
             };
           }
@@ -244,7 +218,7 @@ const QRScanScreen: React.FC = () => {
           console.error('Screenshot error:', e);
         }
       }
-    }, 100); // Scan more frequently for better responsiveness
+    }, 100);
   };
 
   const stopWebScanner = () => {
@@ -256,12 +230,6 @@ const QRScanScreen: React.FC = () => {
       clearInterval(scannerInterval.current);
       scannerInterval.current = null;
     }
-    
-    // Remove feedback element if it exists
-    const feedbackElement = document.getElementById('qr-scan-feedback');
-    if (feedbackElement && document.body.contains(feedbackElement)) {
-      document.body.removeChild(feedbackElement);
-    }
   };
   
   const handleQRCodeData = async (data: string) => {
@@ -272,16 +240,45 @@ const QRScanScreen: React.FC = () => {
         scannerInterval.current = null;
       }
       
-      const qrData = JSON.parse(data);
-      console.log('QR Data parsed:', qrData);
+      // Reset all notifications first
+      setShowSuccess(false);
+      setShowError(false);
+      setErrorMessage('');
+      
+      let qrData;
+      try {
+        qrData = JSON.parse(data);
+        console.log('QR Data parsed successfully:', qrData);
+      } catch (e) {
+        console.error('Failed to parse QR data:', e);
+        setErrorMessage('Invalid QR code format. Please try again.');
+        setShowError(true);
+        setTimeout(() => setShowError(false), 3000);
+        return;
+      }
+      
+      // Validate the QR code is from our system
+      if (!qrData.secureKey || qrData.secureKey !== 'TTPO_2024_ATTENDANCE' || !qrData.version) {
+        console.error('Invalid QR code security validation:', qrData);
+        setErrorMessage('Invalid QR code detected. Please scan a valid attendance code.');
+        setShowError(true);
+        setTimeout(() => setShowError(false), 3000);
+        return;
+      }
       
       if (qrData.type !== 'attendance') {
-        Alert.alert('Invalid QR Code', 'This QR code is not for attendance');
+        console.error('Invalid QR code type:', qrData.type);
+        setErrorMessage('Invalid QR code type. Please scan an attendance QR code.');
+        setShowError(true);
+        setTimeout(() => setShowError(false), 3000);
         return;
       }
       
       if (!studentId) {
-        Alert.alert('Error', 'Student ID not found. Please log in again.');
+        console.error('No student ID found');
+        setErrorMessage('Error: Student ID not found. Please log in again.');
+        setShowError(true);
+        setTimeout(() => setShowError(false), 3000);
         return;
       }
 
@@ -291,17 +288,22 @@ const QRScanScreen: React.FC = () => {
         const user = await authAPI.getCurrentUser();
         if (user && user.firstName && user.lastName) {
           studentName = `${user.lastName}, ${user.firstName}`;
+          console.log('Got student name:', studentName);
         }
       } catch (error) {
         console.error('Error fetching student name:', error);
       }
       
-      console.log('Submitting attendance with studentId:', studentId);
-      console.log('Class from QR code:', qrData.classId);
+      console.log('Submitting attendance with:', {
+        studentId,
+        classId: qrData.classId,
+        studentName
+      });
       
       // Test connection before submission
       const isConnected = await attendanceAPI.testConnection();
       if (!isConnected) {
+        console.error('Failed to connect to attendance server');
         Alert.alert(
           'Connection Issue', 
           'Cannot connect to attendance server. Your attendance will be saved locally but cannot be synchronized now.'
@@ -328,32 +330,31 @@ const QRScanScreen: React.FC = () => {
       }
       
       // Try to get device location if available
-      const submitAttendanceWithLocation = async () => {
-        let locationData = undefined;
-        
-        // Only try to get location on mobile devices
-        if (!isWeb && navigator && navigator.geolocation) {
-          try {
-            const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-              navigator.geolocation.getCurrentPosition(resolve, reject, {
-                enableHighAccuracy: true,
-                timeout: 5000,
-                maximumAge: 0
-              });
+      let locationData = undefined;
+      if (!isWeb && navigator && navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 5000,
+              maximumAge: 0
             });
-            
-            locationData = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude
-            };
-          } catch (error) {
-            console.log('Error getting location:', error);
-            // Continue without location data
-          }
+          });
+          
+          locationData = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          };
+          console.log('Got location data:', locationData);
+        } catch (error) {
+          console.log('Error getting location:', error);
+          // Continue without location data
         }
-        
-        // Process attendance with enhanced data
-        attendanceAPI.submitAttendance({
+      }
+      
+      // Process attendance with enhanced data
+      try {
+        const attendance = await attendanceAPI.submitAttendance({
           classId: qrData.classId,
           studentId,
           studentName,
@@ -361,57 +362,83 @@ const QRScanScreen: React.FC = () => {
           status: 'present',
           recordedVia: 'qr',
           location: locationData
-        }).then((attendance) => {
-          setShowScanner(false);
-          setScanning(false);
-          setConfirmationCode(qrData.classId);
-          setConfirmationSubject(qrData.subjectCode || 'Unknown');
-          setConfirmationClass(qrData.className || qrData.yearSection || 'Unknown');
-          
-          // Save to local storage for records
-          saveAttendanceRecord(
-            qrData.classId, 
-            qrData.subjectCode || 'Unknown', 
-            qrData.className || qrData.yearSection || 'Unknown',
-            studentName
-          );
-          
-          // Also show success notification explicitly here
-          setShowSuccess(true);
-          // Ensure notification stays visible for 3 seconds
-          setTimeout(() => {
-            setShowSuccess(false);
-          }, 3000);
-        }).catch(error => {
-          console.error('Error submitting attendance:', error);
-          
-          // Close scanner
-          setShowScanner(false);
-          setScanning(false);
-          
-          // Display more specific error messages
-          let errorMessage = 'Failed to submit attendance';
-          if (error.message && error.message.includes('Authentication')) {
-            errorMessage = error.message;
-          } else if (error.message && error.message.includes('server')) {
-            errorMessage = error.message;
-          } else if (error.response?.status === 404) {
-            errorMessage = 'Server endpoint not found. Backend may not be running.';
-          } else if (error.response?.status === 401 || error.response?.status === 403) {
-            errorMessage = 'Authentication failed. Please log in again.';
-          } else if (error.response?.data?.message) {
-            errorMessage = error.response.data.message;
-          }
-          
-          Alert.alert('Error', errorMessage);
         });
-      };
-      
-      submitAttendanceWithLocation();
-      
-    } catch (error) {
-      console.error('Error scanning QR code:', error);
-      Alert.alert('Error', 'Failed to process QR code. Please try again.');
+        
+        console.log('Attendance submitted successfully:', attendance);
+        
+        setShowScanner(false);
+        setScanning(false);
+        setConfirmationCode(qrData.classId);
+        setConfirmationSubject(qrData.subjectCode || 'Unknown');
+        setConfirmationClass(qrData.className || qrData.yearSection || 'Unknown');
+        
+        // Save to local storage for records
+        saveAttendanceRecord(
+          qrData.classId, 
+          qrData.subjectCode || 'Unknown', 
+          qrData.className || qrData.yearSection || 'Unknown',
+          studentName
+        );
+        
+        // Show success notification
+        setShowSuccess(true);
+        setTimeout(() => {
+          setShowSuccess(false);
+        }, 3000);
+        
+      } catch (error: any) {
+        console.error('Error submitting attendance:', error);
+        
+        // Close scanner
+        setShowScanner(false);
+        setScanning(false);
+        
+        // Display more specific error messages
+        let errorMessage = 'Failed to submit attendance';
+        let errorTitle = 'Error';
+        let errorDetails = '';
+
+        if (error.response?.status === 404 && error.response?.data?.message?.includes('Student not found in this class')) {
+          errorTitle = 'Not Enrolled';
+          errorMessage = 'You are not enrolled in this class';
+          errorDetails = 'Please verify that you are trying to mark attendance for the correct class. If you believe this is an error, contact your instructor to ensure you are properly enrolled.';
+        } else if (error.message && error.message.includes('Authentication')) {
+          errorMessage = error.message;
+        } else if (error.message && error.message.includes('server')) {
+          errorMessage = error.message;
+        } else if (error.response?.status === 404) {
+          errorMessage = 'Server endpoint not found. Please notify your instructor.';
+        } else if (error.response?.status === 401 || error.response?.status === 403) {
+          errorMessage = 'Authentication failed. Please log in again.';
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        }
+        
+        if (errorDetails) {
+          Alert.alert(
+            errorTitle,
+            errorMessage,
+            [
+              {
+                text: 'More Info',
+                onPress: () => Alert.alert('Additional Information', errorDetails),
+                style: 'default'
+              },
+              {
+                text: 'OK',
+                style: 'cancel'
+              }
+            ]
+          );
+        } else {
+          Alert.alert(errorTitle, errorMessage);
+        }
+      }
+    } catch (error: any) {
+      console.error('Error processing QR code:', error);
+      setErrorMessage('Failed to process QR code. Please try again.');
+      setShowError(true);
+      setTimeout(() => setShowError(false), 3000);
     }
   };
 
@@ -499,43 +526,6 @@ const QRScanScreen: React.FC = () => {
     handleQRCodeData(data);
   };
 
-  const handleManualSubmit = async () => {
-    if (!manualCode.trim()) {
-      Alert.alert('Error', 'Please enter a code');
-      return;
-    }
-    try {
-      if (!studentId) {
-        Alert.alert('Error', 'Student ID not found. Please log in again.');
-        return;
-      }
-      
-      console.log('Manual attendance submission:');
-      console.log('Class code:', manualCode);
-      console.log('Student ID:', studentId);
-      
-      await attendanceAPI.submitAttendance({
-        classId: manualCode,
-        studentId,
-        timestamp: new Date().toISOString(),
-        status: 'present',
-        recordedVia: 'manual'
-      });
-      
-      setShowManualEntry(false);
-      setConfirmationCode(manualCode);
-      setConfirmationSubject('Manual Entry');
-      setConfirmationClass('Manual Entry');
-      
-      // Save to local storage for records
-      saveAttendanceRecord(manualCode, 'Manual Entry', 'Manual Entry', '');
-      
-    } catch (error) {
-      console.error('Error submitting manual code:', error);
-      Alert.alert('Error', 'Failed to submit attendance');
-    }
-  };
-
   const requestPermission = async () => {
     if (isWeb) {
       setHasPermission(true);
@@ -578,11 +568,6 @@ const QRScanScreen: React.FC = () => {
             <View style={styles.scanCorner4} />
             <View style={styles.scanFocusArea} />
           </View>
-          <View style={styles.webcamHelp}>
-            <Text style={styles.webcamHelpText}>
-              Position QR code in the center box
-            </Text>
-          </View>
           <TouchableOpacity 
             style={styles.closeButton}
             onPress={stopWebScanner}
@@ -603,113 +588,114 @@ const QRScanScreen: React.FC = () => {
             <View style={styles.scanCorner3} />
             <View style={styles.scanCorner4} />
           </View>
-          <View style={styles.barcodeHelp}>
-            <Text style={styles.barcodeHelpText}>
-              Point camera at QR code
-            </Text>
-          </View>
         </BarCodeScanner>
       );
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.headerContainer}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            style={styles.menuButton}
-            onPress={() => navigation.toggleDrawer()}
-          >
-            <Ionicons name="menu" size={28} color="white" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>QR Code Attendance</Text>
-        </View>
-      </View>
-
-      <View style={styles.container}>
-        <View style={styles.content}>
-          <Text style={styles.title}>QR CODE{'\n'}ATTENDANCE</Text>
-          <Text style={styles.subtitle}>Scan the QR code to mark your attendance</Text>
-
-          <View style={styles.scannerContainer}>
-            {permissionLoading ? (
-              <View style={styles.placeholderContainer}>
-                <Text style={styles.placeholderText}>Checking camera permission...</Text>
-              </View>
-            ) : hasPermission === false ? (
-              <View style={styles.placeholderContainer}>
-                <Ionicons name="close-circle" size={48} color="#ff6b6b" />
-                <Text style={styles.placeholderText}>
-                  Camera permission denied. Please enable camera access in your device settings.
-                </Text>
-                <TouchableOpacity style={styles.startButton} onPress={openAppSettings}>
-                  <Text style={styles.startButtonText}>Open Settings</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.startButton, { marginTop: 10 }]} onPress={requestPermission}>
-                  <Text style={styles.startButtonText}>Try Again</Text>
-                </TouchableOpacity>
-              </View>
-            ) : !showScanner ? (
-              <View style={styles.placeholderContainer}>
-                <Ionicons name="qr-code" size={48} color="#666" />
-                <Text style={styles.placeholderText}>
-                  Tap the button below to scan QR code
-                </Text>
-                <TouchableOpacity
-                  style={styles.startButton}
-                  onPress={handleStartCamera}
-                >
-                  <Text style={styles.startButtonText}>
-                    {Platform.OS === 'web' ? 'Start Camera' : 'Open QR Scanner'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ) : renderScanner()}
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={styles.modalContainer}>
+        <Animated.View 
+          entering={SlideInDown.springify().damping(15)}
+          exiting={SlideOutDown.springify().damping(15)}
+          style={styles.modalContent}
+        >
+          <View style={styles.modalHandle} />
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>QR Code Scanner</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={onClose}
+            >
+              <Ionicons name="close" size={24} color="#666" />
+            </TouchableOpacity>
           </View>
 
-          {confirmationCode && (
-            <View style={styles.confirmationCard}>
-              <View style={styles.confirmationHeader}>
-                <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
-                <Text style={styles.confirmationTitle}>Attendance Confirmed</Text>
-              </View>
-              <Text style={styles.confirmationText}>
-                Your attendance has been recorded for:
-              </Text>
-              <Text style={styles.confirmationCode}>{confirmationSubject || confirmationCode}</Text>
-              {confirmationClass && confirmationClass !== 'Manual Entry' && (
-                <Text style={styles.confirmationClass}>Class: {confirmationClass}</Text>
-              )}
-              <TouchableOpacity 
-                style={styles.viewRecordsButton}
-                onPress={() => navigation.navigate('Records')}
-              >
-                <Text style={styles.viewRecordsText}>View All Records</Text>
-                <Ionicons name="arrow-forward" size={16} color="#2eada6" />
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={styles.content}>
+            <Text style={styles.subtitle}>Scan the QR code to mark your attendance</Text>
 
-          <TouchableOpacity
-            style={styles.manualButton}
-            onPress={() => setShowManualEntry(true)}
-          >
-            <Text style={styles.manualButtonText}>Enter Code Manually</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.scannerContainer}>
+              {permissionLoading ? (
+                <View style={styles.placeholderContainer}>
+                  <Text style={styles.placeholderText}>Checking camera permission...</Text>
+                </View>
+              ) : hasPermission === false ? (
+                <View style={styles.placeholderContainer}>
+                  <Ionicons name="close-circle" size={48} color="#ff6b6b" />
+                  <Text style={styles.placeholderText}>
+                    Camera permission denied. Please enable camera access in your device settings.
+                  </Text>
+                  <TouchableOpacity style={styles.startButton} onPress={openAppSettings}>
+                    <Text style={styles.startButtonText}>Open Settings</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.startButton, { marginTop: 10 }]} onPress={requestPermission}>
+                    <Text style={styles.startButtonText}>Try Again</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : !showScanner ? (
+                <View style={styles.placeholderContainer}>
+                  <Ionicons name="qr-code" size={48} color="#666" />
+                  <Text style={styles.placeholderText}>
+                    Tap the button below to scan QR code
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.startButton}
+                    onPress={handleStartCamera}
+                  >
+                    <Text style={styles.startButtonText}>
+                      {Platform.OS === 'web' ? 'Start Camera' : 'Open QR Scanner'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : renderScanner()}
+            </View>
+
+            {confirmationCode && (
+              <View style={styles.confirmationCard}>
+                <View style={styles.confirmationHeader}>
+                  <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                  <Text style={styles.confirmationTitle}>Attendance Confirmed</Text>
+                </View>
+                <Text style={styles.confirmationText}>
+                  Your attendance has been recorded for:
+                </Text>
+                <Text style={styles.confirmationCode}>{confirmationSubject || confirmationCode}</Text>
+                {confirmationClass && confirmationClass !== 'Manual Entry' && (
+                  <Text style={styles.confirmationClass}>Class: {confirmationClass}</Text>
+                )}
+                <TouchableOpacity 
+                  style={styles.viewRecordsButton}
+                  onPress={() => {
+                    onClose();
+                    navigation.navigate('Records');
+                  }}
+                >
+                  <Text style={styles.viewRecordsText}>View All Records</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#2eada6" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </Animated.View>
       </View>
 
       {/* Success Notification */}
       {showSuccess && (
-        <View style={styles.successContainer}>
-          <View style={styles.successContent}>
+        <View style={styles.notificationContainer}>
+          <View style={[styles.notificationContent, styles.successContent]}>
             <Ionicons name="checkmark-circle" size={28} color="white" />
-            <View style={styles.successTextContainer}>
-              <Text style={styles.successText}>Attendance recorded successfully!</Text>
+            <View style={styles.notificationTextContainer}>
+              <Text style={styles.notificationText}>Attendance recorded successfully!</Text>
               {confirmationSubject && (
-                <Text style={styles.successSubText}>
-                  Saved to database: {confirmationSubject}{confirmationClass && confirmationClass !== 'Manual Entry' ? ` (${confirmationClass})` : ''}
+                <Text style={styles.notificationSubText}>
+                  Saved to database: {confirmationSubject || ''}{confirmationClass && confirmationClass !== 'Manual Entry' ? ` (${confirmationClass})` : ''}
                 </Text>
               )}
             </View>
@@ -717,92 +703,76 @@ const QRScanScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Manual Entry Modal */}
-      <Modal
-        visible={showManualEntry}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowManualEntry(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter Attendance Code</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Enter code"
-              value={manualCode}
-              onChangeText={setManualCode}
-              autoCapitalize="none"
-            />
-            <View style={styles.modalButtons}>
-            <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-              onPress={() => setShowManualEntry(false)}
-            >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleManualSubmit}
-              >
-                <Text style={styles.modalButtonText}>Submit</Text>
-            </TouchableOpacity>
+      {/* Error Notification */}
+      {showError && (
+        <View style={styles.notificationContainer}>
+          <View style={[styles.notificationContent, styles.errorContent]}>
+            <Ionicons name="alert-circle" size={28} color="white" />
+            <View style={styles.notificationTextContainer}>
+              <Text style={styles.notificationText}>{errorMessage}</Text>
             </View>
           </View>
         </View>
-      </Modal>
-    </SafeAreaView>
+      )}
+    </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
+  modalContainer: {
     flex: 1,
-    backgroundColor: '#2eada6',
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
   },
-  headerContainer: {
-    backgroundColor: '#2eada6',
-    padding: 20,
-    paddingTop: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: '90%',
+    padding: 16,
+    paddingBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 3,
   },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  menuButton: {
+  modalHandle: {
     width: 40,
-    height: 40,
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginVertical: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'flex-start',
-    paddingLeft: 0,
+    alignItems: 'center',
+    position: 'relative',
+    marginBottom: 12,
   },
-  headerTitle: {
-    fontSize: 20,
+  modalTitle: {
+    fontSize: 18,
     fontWeight: 'bold',
-    color: 'white',
-    textAlign: 'right',
+    color: '#2eada6',
+    textAlign: 'center',
   },
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  closeButton: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    padding: 4,
   },
   content: {
-    padding: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    flex: 1,
+    paddingBottom: 40,
   },
   subtitle: {
     fontSize: 16,
     color: '#666',
     marginBottom: 24,
+    textAlign: 'center',
   },
   scannerContainer: {
     width: '100%',
@@ -855,12 +825,6 @@ const styles = StyleSheet.create({
     height: '100%',
     objectFit: 'cover',
   },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 10,
-  },
   confirmationCard: {
     backgroundColor: '#E8F5E9',
     borderRadius: 12,
@@ -909,26 +873,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 4,
   },
-  manualButton: {
-    backgroundColor: 'white',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  manualButtonText: {
-    color: '#2eada6',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  successContainer: {
+  notificationContainer: {
     position: 'absolute',
     bottom: 30,
     left: 20,
@@ -936,8 +881,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 1000,
   },
-  successContent: {
-    backgroundColor: '#4CAF50',
+  notificationContent: {
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 22,
@@ -955,68 +899,26 @@ const styles = StyleSheet.create({
     width: '90%',
     maxWidth: 500,
   },
-  successText: {
+  successContent: {
+    backgroundColor: '#4CAF50',
+  },
+  errorContent: {
+    backgroundColor: '#F44336',
+  },
+  notificationText: {
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
   },
-  successTextContainer: {
+  notificationTextContainer: {
     flexDirection: 'column',
     alignItems: 'flex-start',
+    flex: 1,
   },
-  successSubText: {
+  notificationSubText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '500',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    minHeight: 300,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-  },
-  modalInput: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#9E9E9E',
-  },
-  submitButton: {
-    backgroundColor: '#2eada6',
-  },
-  modalButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
   },
   scanOverlay: {
     position: 'absolute',
@@ -1066,33 +968,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderRightWidth: 3,
     borderColor: 'white',
-  },
-  webcamHelp: {
-    position: 'absolute',
-    bottom: 40,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  webcamHelpText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  barcodeHelp: {
-    position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  barcodeHelpText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   scanFocusArea: {
     position: 'absolute',
