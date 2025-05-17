@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BottomTabNavigationProp, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { CompositeNavigationProp, useNavigation } from '@react-navigation/native';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Dimensions, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ClassScheduleCalendar from '../components/ClassScheduleCalendar';
 import MyClasses from '../components/student/MyClasses';
 import QRScanScreen from '../components/student/QRScanner';
@@ -570,6 +571,33 @@ const StudentScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState('StudentDashboard');
+  const { user, login } = useAuth();
+
+  useEffect(() => {
+    checkStoredCredentials();
+  }, []);
+
+  const checkStoredCredentials = async () => {
+    try {
+      // Try AsyncStorage first
+      let storedUser = await AsyncStorage.getItem('user');
+      let token = await AsyncStorage.getItem('token');
+      
+      // If we're on web and don't have credentials in AsyncStorage, try localStorage
+      if (Platform.OS === 'web' && (!storedUser || !token)) {
+        storedUser = localStorage.getItem('user');
+        token = localStorage.getItem('token');
+      }
+      
+      if (storedUser && token && !user) {
+        const userData = JSON.parse(storedUser);
+        // Re-authenticate user with stored credentials
+        login(userData, token);
+      }
+    } catch (error) {
+      console.error('Error checking stored credentials:', error);
+    }
+  };
 
   const handleTabPress = (index: number, tabName: string) => {
     Animated.spring(slideAnim, {

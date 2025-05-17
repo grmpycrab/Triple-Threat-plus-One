@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { DrawerNavigationProp } from '@react-navigation/drawer';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Dimensions, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import ClassScheduleCalendar from '../components/ClassScheduleCalendar';
 import Reports from '../components/instructor/AttendanceReports';
 import ClassManager, { Class } from '../components/instructor/ClassManager';
@@ -422,12 +423,36 @@ const InstructorScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const slideAnim = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState('Dashboard');
+  const { user, login } = useAuth();
   const [classes, setClasses] = useState<Class[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    checkStoredCredentials();
     fetchClasses();
   }, []);
+
+  const checkStoredCredentials = async () => {
+    try {
+      // Try AsyncStorage first
+      let storedUser = await AsyncStorage.getItem('user');
+      let token = await AsyncStorage.getItem('token');
+      
+      // If we're on web and don't have credentials in AsyncStorage, try localStorage
+      if (Platform.OS === 'web' && (!storedUser || !token)) {
+        storedUser = localStorage.getItem('user');
+        token = localStorage.getItem('token');
+      }
+      
+      if (storedUser && token && !user) {
+        const userData = JSON.parse(storedUser);
+        // Re-authenticate user with stored credentials
+        login(userData, token);
+      }
+    } catch (error) {
+      console.error('Error checking stored credentials:', error);
+    }
+  };
 
   const fetchClasses = async () => {
     try {

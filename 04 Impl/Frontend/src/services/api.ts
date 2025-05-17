@@ -4,7 +4,41 @@ import { Platform } from 'react-native';
 import { UserRole } from '../navigation/types';
 
 // Define base URL
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = 'https://triple-threat-plus-one.onrender.com/api';
+
+// Helper function to store auth data
+const storeAuthData = async (token: string, userData: any) => {
+  try {
+    // Store in AsyncStorage for mobile
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('user', JSON.stringify(userData));
+    
+    // Store in localStorage for web
+    if (Platform.OS === 'web') {
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+    }
+  } catch (error) {
+    console.error('Error storing auth data:', error);
+  }
+};
+
+// Helper function to clear auth data
+const clearAuthData = async () => {
+  try {
+    // Clear AsyncStorage
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('user');
+    
+    // Clear localStorage for web
+    if (Platform.OS === 'web') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+  } catch (error) {
+    console.error('Error clearing auth data:', error);
+  }
+};
 
 // Create axios instance
 const api = axios.create({
@@ -12,13 +46,20 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000, // 10 second timeout
+  timeout: 15000, // Increased to 15 seconds for cloud deployment
 });
 
 // Add token to requests if it exists
 api.interceptors.request.use(async (config) => {
   try {
-    const token = await AsyncStorage.getItem('token');
+    // Try AsyncStorage first
+    let token = await AsyncStorage.getItem('token');
+    
+    // If no token in AsyncStorage and we're on web, try localStorage
+    if (!token && Platform.OS === 'web') {
+      token = localStorage.getItem('token');
+    }
+    
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -44,30 +85,70 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: async (username: string, password: string) => {
-    const response = await api.post('/auth/login', { username, password });
-    // Store the token after successful login
-    if (response.data.token) {
-      await AsyncStorage.setItem('token', response.data.token);
+    try {
+      console.log('Making login request to:', `${BASE_URL}/auth/login`);
+      const response = await api.post('/auth/login', { username, password });
+      console.log('Raw login response:', response);
+
+      if (!response.data || !response.data.token) {
+        throw new Error('Invalid response format from server');
+      }
+
+      // Ensure we have a proper user object
+      const userData = response.data.user || response.data;
+      if (!userData || !userData.role) {
+        throw new Error('Invalid user data received');
+      }
+
+      // Store the token after successful login
+      const token = response.data.token;
+      await storeAuthData(token, userData);
+
+      return {
+        token,
+        user: userData
+      };
+    } catch (error: any) {
+      console.error('Login request failed:', error);
+      if (error.response) {
+        console.error('Error response:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      throw error;
     }
-    return response.data;
   },
+
   getCurrentUser: async () => {
-    const response = await api.get('/auth/me');
-    return response.data;
+    try {
+      console.log('Fetching current user...');
+      const response = await api.get('/auth/me');
+      console.log('Current user response:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+      throw error;
+    }
   },
+
   logout: async () => {
     try {
       // Add the device's time to the request headers
       const deviceTime = new Date().toISOString();
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('token') || localStorage.getItem('token');
+      
+      console.log('Logging out user...');
       const response = await api.post('/auth/logout', {}, {
         headers: {
           'x-device-time': deviceTime,
           'Authorization': `Bearer ${token}`
         }
       });
-      // Clear the token after successful logout
-      await AsyncStorage.removeItem('token');
+      
+      // Clear all stored auth data
+      await clearAuthData();
+      console.log('Logout successful');
       return response.data;
     } catch (error) {
       console.error('Logout error:', error);
@@ -235,34 +316,40 @@ export const attendanceAPI = {
   // Test connection to the server
   async testConnection(): Promise<boolean> {
     try {
-      // Step 1: Try the root endpoint first (simplest)
-      console.log('Testing connection to server root...');
+      // Step 1: Try the Render deployed endpoint
+      console.log('Testing connection to Render deployment...');
       try {
-        const rootResponse = await axios.get('http://localhost:5000/');
-        console.log('Root connection successful:', rootResponse.data);
+        const rootResponse = await axios.get('https://triple-threat-plus-one.onrender.com/');
+        console.log('Render connection successful:', rootResponse.data);
         api.defaults.baseURL = BASE_URL;
         return true;
-      } catch (rootError) {
-        console.error('Root connection failed');
+      } catch (renderError) {
+        console.error('Render connection failed:', renderError);
       }
       
-      // Step 2: Try alternative root
+      // Step 2: Try local development fallback
       try {
-        const rootResponse = await axios.get('http://127.0.0.1:5000/');
-        console.log('Alternative root connection successful:', rootResponse.data);
+        const localResponse = await axios.get('http://localhost:5000/');
+        console.log('Local connection successful:', localResponse.data);
+        api.defaults.baseURL = 'http://localhost:5000/api';
+        return true;
+      } catch (localError) {
+        console.error('Local connection failed');
+      }
+      
+      // Step 3: Try alternative local
+      try {
+        const altResponse = await axios.get('http://127.0.0.1:5000/');
+        console.log('Alternative local connection successful:', altResponse.data);
         api.defaults.baseURL = 'http://127.0.0.1:5000/api';
         return true;
-      } catch (altRootError) {
-        console.error('Alternative root connection failed');
+      } catch (altError) {
+        console.error('Alternative local connection failed');
       }
       
-      // Step 3: Try the attendance test endpoint
-      console.log('Testing connection to attendance API...');
-      const response = await axios.get(`${BASE_URL}/attendance/test`);
-      console.log('Connection test successful:', response.data);
-      return true;
+      throw new Error('All connection attempts failed');
     } catch (error) {
-      console.error('All connection attempts failed:', error);
+      console.error('Connection test failed:', error);
       return false;
     }
   },
