@@ -57,14 +57,14 @@ export const submitAttendance = async (req: Request, res: Response) => {
     let attendance;
     try {
       attendance = await Attendance.findOne({
-        classId,
-        studentId,
-        timestamp: {
-          $gte: startOfDay,
-          $lte: endOfDay
-        }
-      });
-      
+      classId,
+      studentId,
+      timestamp: {
+        $gte: startOfDay,
+        $lte: endOfDay
+      }
+    });
+    
       if (attendance) {
         // Store the previous status before updating
         const previousStatus = attendance.status;
@@ -76,11 +76,11 @@ export const submitAttendance = async (req: Request, res: Response) => {
         attendance.status = status;
         attendance.recordedVia = recordedVia || attendance.recordedVia;
         attendance.studentName = studentName || attendance.studentName;
-        
+      
         if (deviceInfo) attendance.deviceInfo = deviceInfo;
         if (ipAddress) attendance.ipAddress = ipAddress;
         if (location) attendance.location = location;
-        
+      
         await attendance.save();
         
         // Update student's attendance stats
@@ -103,23 +103,23 @@ export const submitAttendance = async (req: Request, res: Response) => {
         
         console.log(`Attendance record updated successfully: ${attendance._id}`);
       } else {
-        // Create new attendance record
-        const attendanceData = {
-          classId,
-          studentId,
-          studentName,
-          timestamp: timestamp || new Date(),
-          status: status || 'present',
-          recordedVia: recordedVia || 'qr',
-          deviceInfo,
-          ipAddress,
-          location
-        };
-        
+    // Create new attendance record
+      const attendanceData = {
+        classId,
+        studentId,
+        studentName,
+        timestamp: timestamp || new Date(),
+        status: status || 'present',
+        recordedVia: recordedVia || 'qr',
+        deviceInfo,
+        ipAddress,
+        location
+      };
+      
         console.log('Creating new attendance record with data:', JSON.stringify(attendanceData));
-        
+      
         attendance = await Attendance.create(attendanceData);
-        
+      
         // Update student's attendance stats for new record
         await Student.findOneAndUpdate(
           { studentId },
