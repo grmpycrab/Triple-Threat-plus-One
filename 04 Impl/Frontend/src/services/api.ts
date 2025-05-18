@@ -3,8 +3,8 @@ import axios from 'axios';
 import { Platform } from 'react-native';
 import { UserRole } from '../navigation/types';
 
-// Define base URL
-const BASE_URL = 'https://triple-threat-plus-one.onrender.com/api';
+//const BASE_URL = 'https://triple-threat-plus-one.onrender.com/api';
+const BASE_URL = 'http://localhost:5000/api';
 
 // Helper function to store auth data
 const storeAuthData = async (token: string, userData: any) => {
